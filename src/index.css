@@ -1,8 +1,796 @@
+:root {
+  /* Variables por defecto (Tema Claro) */
+  --mush-negro: #fcfaf7;
+  --mush-superficie: #ffffff;
+  --mush-superficie-alta: #f6f2ec;
+  --mush-superficie-elevada: #ede6dc;
+  --mush-borde: #c9bcad;
+  --mush-texto: #1c1917;
+  --mush-tenue: #6c635a;
+  --mush-dulce: #b46d1b;
+  --mush-dulce-suave: rgba(180, 109, 27, 0.12);
+  --mush-dulce-borde: rgba(180, 109, 27, 0.35);
+  --mush-ok: #0d824d;
+  --mush-ok-bg: rgba(13, 130, 77, 0.1);
+  --mush-alerta: #b45309;
+  --mush-alerta-bg: rgba(180, 83, 9, 0.12);
+  --mush-riesgo: #dc2626;
+  --mush-riesgo-bg: rgba(220, 38, 38, 0.12);
+  --mush-info: #0284c7;
+  --mush-info-bg: rgba(2, 132, 199, 0.12);
+}
+
+/* Variables para Tema Claro */
+[data-bs-theme="light"] {
+  --mush-negro: #fcfaf7;
+  --mush-superficie: #ffffff;
+  --mush-superficie-alta: #f6f2ec;
+  --mush-superficie-elevada: #ede6dc;
+  --mush-borde: #c9bcad;
+  --mush-texto: #1c1917;
+  --mush-tenue: #6c635a;
+  --mush-dulce: #b46d1b;
+  --mush-dulce-suave: rgba(180, 109, 27, 0.12);
+  --mush-dulce-borde: rgba(180, 109, 27, 0.35);
+  --mush-ok: #0d824d;
+  --mush-ok-bg: rgba(13, 130, 77, 0.1);
+  --mush-alerta: #b45309;
+  --mush-alerta-bg: rgba(180, 83, 9, 0.12);
+  --mush-riesgo: #dc2626;
+  --mush-riesgo-bg: rgba(220, 38, 38, 0.12);
+  --mush-info: #0284c7;
+  --mush-info-bg: rgba(2, 132, 199, 0.12);
+
+  --bs-body-bg: var(--mush-negro);
+  --bs-body-color: var(--mush-texto);
+  --bs-border-color: var(--mush-borde);
+  --bs-emphasis-color: var(--mush-texto);
+  --bs-secondary-color: var(--mush-tenue);
+  --bs-link-color-rgb: 180, 109, 27;
+  --bs-link-hover-color-rgb: 150, 87, 16;
+}
+
+/* Variables para Tema Oscuro */
+[data-bs-theme="dark"] {
+  --mush-negro: #0d0d0f;
+  --mush-superficie: #16161a;
+  --mush-superficie-alta: #202026;
+  --mush-superficie-elevada: #2a2a32;
+  --mush-borde: #444452;
+  --mush-texto: #fbf9f6;
+  --mush-tenue: #9d9da8;
+  --mush-dulce: #d29a54;
+  --mush-dulce-suave: rgba(210, 154, 84, 0.12);
+  --mush-dulce-borde: rgba(210, 154, 84, 0.35);
+  --mush-ok: #10b981;
+  --mush-ok-bg: rgba(16, 185, 129, 0.12);
+  --mush-alerta: #f59e0b;
+  --mush-alerta-bg: rgba(245, 158, 11, 0.14);
+  --mush-riesgo: #ef4444;
+  --mush-riesgo-bg: rgba(239, 68, 68, 0.14);
+  --mush-info: #38bdf8;
+  --mush-info-bg: rgba(56, 189, 248, 0.12);
+
+  --bs-body-bg: var(--mush-negro);
+  --bs-body-color: var(--mush-texto);
+  --bs-border-color: var(--mush-borde);
+  --bs-emphasis-color: var(--mush-texto);
+  --bs-secondary-color: var(--mush-tenue);
+  --bs-link-color-rgb: 210, 154, 84;
+  --bs-link-hover-color-rgb: 228, 170, 101;
+}
+
+body {
+  background-color: var(--mush-negro);
+  color: var(--mush-texto);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
 #root {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
+
 main {
-  flex-grow: 1;
+  flex: 1 0 auto;
 }
+
+footer {
+  margin-top: auto;
+}
+
+/* Tipografía de marca */
+.mush-display {
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.mush-kicker {
+  font-size: 0.72rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--mush-dulce);
+  font-weight: 700;
+}
+
+/* Contenedor centralizado amplio para todo el proyecto (Páginas, Navbar y Footer) */
+.container, .container-sm, .container-md, .container-lg, .container-xl, .container-xxl {
+  max-width: 1460px !important;
+  width: 94% !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+/* Superficies y Cards */
+.mush-card {
+  background-color: var(--mush-superficie);
+  border: 1.5px solid var(--mush-borde);
+  border-radius: 1rem;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+  position: relative;
+  overflow: hidden;
+}
+
+.mush-card-elevada {
+  background-color: var(--mush-superficie-alta);
+  border: 1.5px solid var(--mush-borde);
+  border-radius: 0.85rem;
+}
+
+/* Tarjeta anidada dentro de otra seccion (la pasta y el praline de pistacho).
+   Se despega apenas del fondo para que se lea como un bloque aparte, sin salir
+   de la paleta. */
+.mush-card-anidada {
+  background-color: var(--mush-superficie-alta);
+  border-color: var(--mush-dulce-borde);
+}
+
+.mush-card-hover {
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mush-card-hover:hover {
+  border-color: var(--mush-dulce-borde);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 25px rgba(60, 40, 15, 0.1), 0 0 15px var(--mush-dulce-suave);
+}
+
+/* Portada / Hero */
+.mush-hero {
+  background:
+    radial-gradient(circle at 10% 20%, rgba(180, 109, 27, 0.08), transparent 45%),
+    radial-gradient(circle at 90% 80%, rgba(88, 51, 24, 0.06), transparent 50%),
+    linear-gradient(180deg, #ffffff 0%, var(--mush-negro) 100%);
+  border-bottom: 1px solid var(--mush-borde);
+}
+
+[data-bs-theme="dark"] .mush-hero {
+  background:
+    radial-gradient(circle at 10% 20%, rgba(210, 154, 84, 0.18), transparent 45%),
+    radial-gradient(circle at 90% 80%, rgba(122, 79, 43, 0.2), transparent 50%),
+    linear-gradient(180deg, #131316 0%, var(--mush-negro) 100%);
+  border-bottom: 1px solid var(--mush-borde);
+}
+
+/* Logos adaptables */
+.mush-logo-nav {
+  height: 74px;
+  width: auto;
+  max-width: 220px;
+  object-fit: contain;
+  filter: brightness(0) drop-shadow(0 2px 6px rgba(0, 0, 0, 0.15));
+  transition: transform 0.2s ease;
+}
+
+[data-bs-theme="dark"] .mush-logo-nav {
+  filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.7));
+}
+
+.mush-logo-nav:hover {
+  transform: scale(1.05);
+}
+
+@media (max-width: 992px) {
+  .mush-logo-nav {
+    height: 60px;
+  }
+}
+
+@media (max-width: 576px) {
+  .mush-logo-nav {
+    height: 50px;
+  }
+}
+
+.mush-logo-hero {
+  max-width: 220px;
+  width: 100%;
+  height: auto;
+  filter: brightness(0) drop-shadow(0 4px 12px rgba(0, 0, 0, 0.12));
+}
+
+[data-bs-theme="dark"] .mush-logo-hero {
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.6));
+}
+
+/* Navegación contenida */
+header.sticky-top {
+  background: transparent;
+}
+
+.mush-navbar {
+  background-color: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+  border: 1.5px solid var(--mush-borde);
+  box-shadow: 0 4px 18px rgba(60, 40, 15, 0.05);
+  z-index: 1030;
+}
+
+[data-bs-theme="dark"] .mush-navbar {
+  background-color: rgba(22, 22, 26, 0.92);
+  border: 1.5px solid var(--mush-borde);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+}
+
+.mush-nav-link {
+  color: var(--mush-tenue);
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 600;
+  padding: 0.5rem 0.85rem !important;
+  border-radius: 0.5rem;
+  transition: all 0.18s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  text-decoration: none;
+  border: 1px solid transparent;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.mush-nav-link:hover, .mush-nav-link:focus-visible {
+  color: var(--mush-texto);
+  background-color: var(--mush-superficie-alta);
+}
+
+.mush-nav-link.activo {
+  color: var(--mush-dulce);
+  background-color: var(--mush-dulce-suave);
+  border: 1px solid var(--mush-dulce-borde);
+}
+
+/* Botones con estilo MUSH */
+.btn-mush {
+  background-color: #059669;
+  color: #ffffff !important;
+  font-weight: 700;
+  font-size: 0.82rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  border: none;
+  padding: 0.42rem 0.95rem;
+  border-radius: 0.55rem;
+  transition: all 0.18s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  text-decoration: none;
+  box-shadow: 0 2px 6px rgba(5, 150, 105, 0.3);
+  white-space: nowrap;
+}
+
+[data-bs-theme="dark"] .btn-mush {
+  background-color: #10b981;
+  color: #042f22 !important;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+.btn-mush:hover, .btn-mush:focus {
+  background-color: #047857;
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.45);
+  transform: translateY(-1px);
+}
+
+[data-bs-theme="dark"] .btn-mush:hover, [data-bs-theme="dark"] .btn-mush:focus {
+  background-color: #059669;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.45);
+}
+
+.btn-mush-outline {
+  background-color: transparent;
+  color: #059669;
+  font-weight: 600;
+  font-size: 0.82rem;
+  border: 1.5px solid #059669;
+  padding: 0.4rem 0.85rem;
+  border-radius: 0.55rem;
+  transition: all 0.18s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+[data-bs-theme="dark"] .btn-mush-outline {
+  color: #34d399;
+  border-color: #34d399;
+}
+
+.btn-mush-outline:hover {
+  background-color: rgba(5, 150, 105, 0.15);
+  color: #047857;
+}
+
+[data-bs-theme="dark"] .btn-mush-outline:hover {
+  background-color: rgba(16, 185, 129, 0.15);
+  color: #6ee7b7;
+  border-color: #6ee7b7;
+}
+
+.btn-mush-ghost {
+  background-color: var(--mush-superficie-alta);
+  color: var(--mush-texto);
+  font-weight: 600;
+  font-size: 0.85rem;
+  border: 1px solid var(--mush-borde);
+  padding: 0.5rem 0.9rem;
+  border-radius: 0.6rem;
+  transition: all 0.18s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  text-decoration: none;
+}
+
+.btn-mush-ghost:hover {
+  background-color: var(--mush-superficie-elevada);
+  border-color: var(--mush-dulce);
+  color: var(--mush-texto);
+}
+
+/* Badges / Etiquetas */
+.mush-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.35rem 0.7rem;
+  border-radius: 99px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.mush-badge-ok {
+  background-color: var(--mush-ok-bg);
+  color: var(--mush-ok);
+  border: 1px solid rgba(13, 130, 77, 0.3);
+}
+
+.mush-badge-alerta {
+  background-color: var(--mush-alerta-bg);
+  color: var(--mush-alerta);
+  border: 1px solid rgba(180, 83, 9, 0.3);
+}
+
+.mush-badge-critico {
+  background-color: var(--mush-riesgo-bg);
+  color: var(--mush-riesgo);
+  border: 1px solid rgba(220, 38, 38, 0.3);
+}
+
+.mush-badge-dulce {
+  background-color: var(--mush-dulce-suave);
+  color: var(--mush-dulce);
+  border: 1px solid var(--mush-dulce-borde);
+}
+
+.mush-badge-info {
+  background-color: var(--mush-info-bg);
+  color: var(--mush-info);
+  border: 1px solid rgba(2, 132, 199, 0.3);
+}
+
+/* Indicadores de datos */
+.mush-dato {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.mush-kpi-card {
+  padding: 1.25rem;
+  background-color: var(--mush-superficie);
+  border: 1px solid var(--mush-borde);
+  border-radius: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  box-shadow: 0 4px 14px rgba(60, 40, 15, 0.04);
+  transition: all 0.2s ease;
+}
+
+.mush-kpi-card:hover {
+  border-color: var(--mush-dulce-borde);
+  background-color: var(--mush-superficie-alta);
+  transform: translateY(-2px);
+}
+
+.mush-kpi-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 0.7rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+}
+
+/* Tablas con contorno y divisiones bien marcadas */
+.mush-tabla {
+  --bs-table-bg: transparent;
+  --bs-table-color: var(--mush-texto);
+  --bs-table-hover-bg: rgba(255, 255, 255, 0.05);
+  --bs-table-hover-color: var(--mush-texto);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 0;
+  vertical-align: middle;
+  border: 2px solid rgba(255, 255, 255, 0.25) !important;
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+[data-bs-theme="light"] .mush-tabla {
+  border: 2px solid rgba(0, 0, 0, 0.22) !important;
+}
+
+.mush-tabla thead th {
+  font-size: 0.73rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mush-texto);
+  font-weight: 700;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.3) !important;
+  border-right: 1.5px solid rgba(255, 255, 255, 0.18) !important;
+  padding: 0.38rem 0.7rem;
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.mush-tabla thead th:last-child {
+  border-right: none !important;
+}
+
+.mush-tabla tbody td {
+  padding: 0.2rem 0.7rem;
+  border-bottom: 1.5px solid rgba(255, 255, 255, 0.18) !important;
+  border-right: 1.5px solid rgba(255, 255, 255, 0.14) !important;
+}
+
+.mush-tabla tbody tr {
+  height: 30px;
+}
+
+.mush-tabla tbody td:last-child {
+  border-right: none !important;
+}
+
+.mush-tabla tbody tr:last-child td {
+  border-bottom: none !important;
+}
+
+[data-bs-theme="light"] .mush-tabla thead th {
+  border-bottom: 2px solid rgba(0, 0, 0, 0.28) !important;
+  border-right: 1.5px solid rgba(0, 0, 0, 0.16) !important;
+  background-color: rgba(0, 0, 0, 0.06);
+  padding: 0.38rem 0.7rem;
+}
+
+[data-bs-theme="light"] .mush-tabla tbody td {
+  border-bottom: 1.5px solid rgba(0, 0, 0, 0.18) !important;
+  border-right: 1.5px solid rgba(0, 0, 0, 0.14) !important;
+  padding: 0.2rem 0.7rem;
+}
+
+/* Formularios estilizados */
+.mush-input, .mush-select {
+  background-color: var(--mush-superficie) !important;
+  border: 1px solid var(--mush-borde) !important;
+  color: var(--mush-texto) !important;
+  border-radius: 0.6rem !important;
+  padding: 0.6rem 0.85rem !important;
+  font-size: 0.9rem !important;
+}
+
+.mush-input:focus, .mush-select:focus {
+  border-color: var(--mush-dulce) !important;
+  box-shadow: 0 0 0 3px var(--mush-dulce-suave) !important;
+}
+
+/* Compartimento de resultado: se separa del resto y lleva fondo propio
+   para que se lea como un valor calculado, no como un dato cargado. */
+.mush-division-resultado {
+  background-color: var(--mush-ok-bg);
+  border: 1.5px solid var(--mush-borde);
+  border-radius: 0.85rem;
+}
+
+/* Numero sin las flechitas nativas del navegador (se usan botones + / -) */
+.mush-sin-spinner::-webkit-outer-spin-button,
+.mush-sin-spinner::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.mush-sin-spinner {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* Divisiones internas de una tarjeta (separador entre secciones) */
+.mush-division {
+  border-bottom: 1.5px solid var(--mush-borde);
+}
+
+@media (min-width: 768px) {
+  .mush-division {
+    border-bottom: none;
+    border-right: 1.5px solid var(--mush-borde);
+  }
+}
+
+/* Buscador con boton para limpiar el filtro */
+.mush-buscador {
+  position: relative;
+}
+
+.mush-buscador .mush-input {
+  padding-right: 2.1rem !important;
+}
+
+.mush-filtro-limpiar {
+  position: absolute;
+  top: 50%;
+  right: 0.55rem;
+  transform: translateY(-50%);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.2rem;
+  height: 1.2rem;
+  padding: 0;
+  border: none;
+  border-radius: 99px;
+  background-color: var(--mush-superficie-elevada);
+  color: var(--mush-tenue);
+  font-size: 0.6rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.mush-filtro-limpiar:hover,
+.mush-filtro-limpiar:focus-visible {
+  background-color: var(--mush-dulce-suave);
+  color: var(--mush-dulce);
+}
+
+/* Barras de progreso personalizadas */
+.mush-progress-bar {
+  height: 8px;
+  background-color: var(--mush-superficie-elevada);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.mush-progress-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.3s ease;
+}
+
+/* Tabs personalizadas */
+.mush-tabs {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--mush-borde);
+  padding-bottom: 0.5rem;
+  overflow-x: auto;
+}
+
+.mush-tab-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--mush-tenue);
+  font-size: 0.84rem;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.mush-tab-btn:hover {
+  color: var(--mush-texto);
+  background-color: var(--mush-superficie-alta);
+}
+
+.mush-tab-btn.activo {
+  color: var(--mush-dulce);
+  background-color: var(--mush-dulce-suave);
+  border-color: var(--mush-dulce-borde);
+}
+
+/* Modales */
+.modal-content.mush-modal {
+  background-color: var(--mush-superficie);
+  border: 1px solid var(--mush-borde);
+  border-radius: 1rem;
+  color: var(--mush-texto);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15);
+}
+
+[data-bs-theme="dark"] .modal-content.mush-modal {
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6);
+}
+
+.modal-header.mush-modal-header {
+  border-bottom: 1px solid var(--mush-borde);
+  padding: 1.25rem 1.5rem;
+}
+
+.modal-footer.mush-modal-footer {
+  border-top: 1px solid var(--mush-borde);
+  padding: 1.25rem 1.5rem;
+}
+
+/* Adaptaciones de clases de texto y fondos para compatibilidad total con Modo Claro */
+[data-bs-theme="light"] .text-white {
+  color: #1c1917 !important;
+}
+
+[data-bs-theme="light"] .text-light {
+  color: #332f2b !important;
+}
+
+[data-bs-theme="light"] .bg-black {
+  background-color: var(--mush-superficie-alta) !important;
+}
+
+[data-bs-theme="light"] .bg-dark {
+  background-color: var(--mush-superficie-alta) !important;
+  color: var(--mush-texto) !important;
+  border-color: var(--mush-borde) !important;
+}
+
+[data-bs-theme="light"] .btn-close-white {
+  filter: none !important;
+}
+
+[data-bs-theme="light"] .btn-outline-secondary {
+  border-color: var(--mush-borde) !important;
+  color: var(--mush-texto) !important;
+}
+
+[data-bs-theme="light"] .btn-outline-secondary:hover {
+  background-color: var(--mush-superficie-alta) !important;
+  color: var(--mush-texto) !important;
+}
+
+/* Utilidades */
+.mush-scroll-x {
+  overflow-x: auto;
+}
+
+.text-dulce {
+  color: var(--mush-dulce) !important;
+}
+
+.text-ok {
+  color: var(--mush-ok) !important;
+}
+
+.text-alerta {
+  color: var(--mush-alerta) !important;
+}
+
+.text-riesgo {
+  color: var(--mush-riesgo) !important;
+}
+
+.bg-dulce-suave {
+  background-color: var(--mush-dulce-suave) !important;
+}
+
+.border-dulce {
+  border-color: var(--mush-dulce) !important;
+}
+
+/* SweetAlert2 Fondo Claro & Formato Compacto */
+.swal2-popup {
+  border-radius: 1rem !important;
+  background: #ffffff !important;
+  color: #1c1917 !important;
+  border: 1.5px solid rgba(0, 0, 0, 0.12) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2) !important;
+  width: 330px !important;
+  max-width: 90vw !important;
+  padding: 1.1rem 1.25rem !important;
+}
+
+.swal2-title {
+  color: #1c1917 !important;
+  font-weight: 700 !important;
+  font-size: 1.05rem !important;
+  margin-bottom: 0.35rem !important;
+  padding: 0 !important;
+}
+
+.swal2-html-container {
+  color: #4b5563 !important;
+  font-size: 0.84rem !important;
+  margin: 0.25rem 0 0.6rem 0 !important;
+}
+
+.swal2-icon {
+  transform: scale(0.68) !important;
+  margin: 0.4rem auto 0.2rem auto !important;
+}
+
+.swal2-actions {
+  margin-top: 0.5rem !important;
+  gap: 0.4rem !important;
+}
+
+.swal2-confirm, .swal2-cancel {
+  font-size: 0.8rem !important;
+  padding: 0.35rem 0.8rem !important;
+  border-radius: 0.5rem !important;
+}
+
+/* Encabezados de tabla pegajosos para scroll interno */
+.mush-tabla thead th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background-color: var(--mush-superficie);
+}
+
+/* Scrollbar sutil para contenedores de tablas */
+.mush-scroll-tabla {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(150, 150, 150, 0.3) transparent;
+}
+
+.mush-scroll-tabla::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.mush-scroll-tabla::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.mush-scroll-tabla::-webkit-scrollbar-thumb {
+  background-color: rgba(150, 150, 150, 0.3);
+  border-radius: 4px;
+}
+
+.mush-scroll-tabla::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(150, 150, 150, 0.55);
+}
+
