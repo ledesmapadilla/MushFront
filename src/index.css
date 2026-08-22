@@ -503,6 +503,21 @@ header.sticky-top {
   padding: 0.2rem 0.7rem;
 }
 
+/* Variante compacta de la tabla: las mismas reglas, con las filas mas juntas
+   para que un detalle largo (la composicion de un costo) entre sin scroll. */
+.mush-tabla-compacta tbody tr {
+  height: 24px;
+}
+
+.mush-tabla-compacta thead th {
+  padding: 0.28rem 0.55rem;
+}
+
+.mush-tabla-compacta tbody td,
+[data-bs-theme="light"] .mush-tabla-compacta tbody td {
+  padding: 0.1rem 0.55rem;
+}
+
 /* Formularios estilizados */
 .mush-input, .mush-select {
   background-color: var(--mush-superficie) !important;

@@ -24,7 +24,7 @@ const Menu = () => {
   const alertas = listaAlertas();
   const opActivas = ordenesProduccion.filter((op) => op.estado !== "Terminada");
   // Al entrar a una tarjeta se navega a una ruta anidada (/recetas/maicena,
-  // /costos/mendiant): la pagina de la que salio queda destacada igual.
+  // /costos/mendiant/packaging): la pagina de la que salio queda destacada igual.
   const rutaActiva = (ruta) =>
     location.pathname === ruta || location.pathname.startsWith(`${ruta}/`);
 
@@ -40,7 +40,6 @@ const Menu = () => {
   const navItems = [
     { ruta: "/recetas", etiqueta: "Recetas", icono: "bi-book" },
     { ruta: "/costos", etiqueta: "Costos", icono: "bi-cash-stack" },
-    { ruta: "/calculadora", etiqueta: "Calculadora", icono: "bi-calculator" },
     {
       ruta: "/stock",
       etiqueta: "Insumos & Stock",

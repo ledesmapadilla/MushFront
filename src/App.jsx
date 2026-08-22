@@ -5,7 +5,6 @@ import Footer from "./components/shared/Footer.jsx";
 import Inicio from "./components/pages/Inicio.jsx";
 import Recetas from "./components/pages/Recetas.jsx";
 import RecetaDetalle from "./components/pages/RecetaDetalle.jsx";
-import Calculadora from "./components/pages/Calculadora.jsx";
 import StockInsumos from "./components/pages/StockInsumos.jsx";
 import Produccion from "./components/pages/Produccion.jsx";
 import CostosFinanzas from "./components/pages/CostosFinanzas.jsx";
@@ -16,6 +15,7 @@ import Packaging from "./components/pages/Packaging.jsx";
 import AltaPersonal from "./components/pages/AltaPersonal.jsx";
 import Precios from "./components/pages/Precios.jsx";
 import Costos from "./components/pages/Costos.jsx";
+import CostoDetalle from "./components/pages/CostoDetalle.jsx";
 import Error404 from "./components/pages/Error404.jsx";
 
 function App() {
@@ -29,7 +29,6 @@ function App() {
             <Route path="/recetas" element={<Recetas />} />
             <Route path="/recetas/:slug" element={<RecetaDetalle />} />
             <Route path="/recetas/:slug/:seccion" element={<RecetaDetalle />} />
-            <Route path="/calculadora" element={<Calculadora />} />
             <Route path="/productos" element={<AltaAlfajores />} />
             <Route path="/altas/alfajores" element={<AltaAlfajores />} />
             <Route path="/altas/productos" element={<AltaAlfajores />} />
@@ -47,6 +46,8 @@ function App() {
             <Route path="/produccion" element={<Produccion />} />
             <Route path="/finanzas" element={<CostosFinanzas />} />
             <Route path="/costos" element={<Costos />} />
+            <Route path="/costos/:slug" element={<Navigate to="/costos" replace />} />
+            <Route path="/costos/:slug/:parte" element={<CostoDetalle />} />
             <Route path="/ventas" element={<Ventas />} />
             <Route path="*" element={<Error404 />} />
           </Routes>

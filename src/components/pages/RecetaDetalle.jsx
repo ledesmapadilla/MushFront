@@ -3,8 +3,11 @@ import { useParams, Link } from "react-router-dom";
 import { useMush } from "../../context/MushContext";
 import BuscadorFiltro from "../shared/BuscadorFiltro.jsx";
 import ConversorUnidades from "../shared/ConversorUnidades.jsx";
-import { moneda, fechaHoy, valorMensual } from "../../utils/sueldos.js";
-import { formatearCantidad } from "../../utils/conversiones.js";
+import { moneda, fechaHoy, valorMensual, valorHora } from "../../utils/sueldos.js";
+import { numero } from "../../utils/calculos.js";
+import { variedadesDe, productoDeVariedad } from "../../data/productos.js";
+import { PREPARACIONES } from "../../data/preparaciones.js";
+import { unidadSingular } from "../../utils/costos.js";
 import Swal from "sweetalert2";
 
 const UNIDADES_INGREDIENTE = ["kg", "gr", "un", "lts", "ml", "otras"];
@@ -23,13 +26,13 @@ const SECCIONES = [
     escala: "amplia",
     columnaGrid: "col-4",
     titulo: "Masa",
-    detalle: (receta) => `${receta.rinde || 60} alfajores`,
+    detalle: (receta) => rindeDeReceta(receta),
     // Se carga en la unidad que venga anotada, asi que lleva el conversor
     conversor: true,
     columna: "Ingrediente",
     catalogo: "ingredientes",
     unidades: UNIDADES_INGREDIENTE,
-    unidadPorDefecto: "kg",
+    unidadPorDefecto: "gr",
     textoBoton: "Nuevo Ingrediente",
     vacio: "No hay ingredientes cargados.",
   },
@@ -38,7 +41,8 @@ const SECCIONES = [
     emoji: "🥄",
     escala: "amplia",
     columnaGrid: "col-4",
-    titulo: "Ingredientes por alfajor",
+    titulo: "Ingredientes",
+    porUnidad: true,
     conversor: true,
     // Cada fila se puede desglosar en varios componentes; la cantidad que se ve
     // en la tabla es la suma de ellos.
@@ -46,7 +50,7 @@ const SECCIONES = [
     columna: "Ingrediente",
     catalogo: "ingredientes",
     unidades: UNIDADES_INGREDIENTE,
-    unidadPorDefecto: "un",
+    unidadPorDefecto: "gr",
     textoBoton: "Nuevo Ingrediente",
     vacio: "No hay ingredientes cargados.",
   },
@@ -55,7 +59,8 @@ const SECCIONES = [
     emoji: "📦",
     escala: "amplia",
     columnaGrid: "col-4",
-    titulo: "Packaging por alfajor",
+    titulo: "Packaging",
+    porUnidad: true,
     columna: "Packaging",
     catalogo: "packaging",
     unidades: UNIDADES_PACKAGING,
@@ -63,34 +68,20 @@ const SECCIONES = [
     textoBoton: "Nuevo Packaging",
     vacio: "No hay packaging cargado.",
   },
-  {
-    id: "pasta-pistacho",
-    titulo: "Pasta de Pistacho",
-    gramosBase: 740,
-    // No es una tarjeta propia: es una tabla mas dentro de otra seccion, y solo
-    // en las recetas que la lleven.
+  // Las preparaciones de la casa (pasta, praline, bano de chocolate). No son
+  // tarjetas propias: son tablas mas dentro de otra seccion, y solo en las
+  // recetas que las lleven. Lo suyo (titulo y base) sale de data/preparaciones,
+  // que es lo mismo que usa Costos para sus tablas de calculo.
+  ...PREPARACIONES.map((preparacion) => ({
     dentroDe: "unitario",
-    soloEn: ["alfajor-de-pistacho"],
     columna: "Ingrediente",
     catalogo: "ingredientes",
     unidades: UNIDADES_INGREDIENTE,
     unidadPorDefecto: "gr",
     textoBoton: "Nuevo Ingrediente",
     vacio: "No hay ingredientes cargados.",
-  },
-  {
-    id: "praline-pistacho",
-    titulo: "Praliné de Pistacho",
-    gramosBase: 240,
-    dentroDe: "unitario",
-    soloEn: ["alfajor-de-pistacho"],
-    columna: "Ingrediente",
-    catalogo: "ingredientes",
-    unidades: UNIDADES_INGREDIENTE,
-    unidadPorDefecto: "gr",
-    textoBoton: "Nuevo Ingrediente",
-    vacio: "No hay ingredientes cargados.",
-  },
+    ...preparacion,
+  })),
   {
     id: "mano-de-obra",
     emoji: "🧑‍🍳",
@@ -105,11 +96,42 @@ const SECCIONES = [
   },
 ];
 
-// El detalle del titulo de una seccion con gramos de referencia sale de ese
-// mismo numero, para no escribirlo dos veces.
+// El detalle del titulo de una seccion sale del mismo numero con el que esta
+// escrita, para no anotarlo dos veces.
 SECCIONES.forEach((s) => {
-  if (s.gramosBase && !s.detalle) s.detalle = () => `${s.gramosBase} gr`;
+  if (s.detalle) return;
+  if (s.gramosBase) s.detalle = () => `${s.gramosBase} gr`;
+  if (s.alfajoresBase) s.detalle = (receta) => `${s.alfajoresBase} ${unidadPlural(receta)}`;
 });
+
+// Las secciones "por unidad" cierran su titulo con la unidad de la receta:
+// "Packaging por alfajor" o "Packaging por lata".
+const tituloDeSeccion = (seccion, receta) =>
+  seccion.porUnidad ? `${seccion.titulo} por ${unidadSingular(receta)}` : seccion.titulo;
+
+const conMayuscula = (texto) => texto.charAt(0).toUpperCase() + texto.slice(1);
+
+// Plural de la unidad del rinde: "lata" -> "latas", "alfajores" -> "alfajores".
+const unidadPlural = (receta) => {
+  const unidad = receta?.unidadRinde || "alfajores";
+  return unidad.endsWith("s") ? unidad : `${unidad}s`;
+};
+
+const etiquetaProducidos = (receta) =>
+  (receta?.unidadRinde || "alfajores") === "alfajores"
+    ? "Alfajores producidos"
+    : `${conMayuscula(unidadPlural(receta))} por hora`;
+
+const etiquetaCostoMO = (receta) => `Costo M.O por ${unidadSingular(receta)}`;
+
+// El rinde se expresa en la unidad de la receta: casi siempre alfajores, pero
+// el mendiant, por ejemplo, rinde una lata.
+const rindeDeReceta = (receta) => {
+  const cantidad = receta?.rinde || 60;
+  const unidad = receta?.unidadRinde || "alfajores";
+  const enPlural = cantidad === 1 || unidad.endsWith("s") ? unidad : `${unidad}s`;
+  return `${cantidad} ${enPlural}`;
+};
 
 // El ancho del bloque lo comparten el titulo y la grilla, para que no se desfasen.
 const ANCHO_BLOQUE = "820px";
@@ -120,15 +142,33 @@ const ESCALAS = {
   densa: { alto: "135px", padding: "p-2 p-sm-3", emoji: "fs-2 mb-2", texto: "0.8rem" },
 };
 
+/**
+ * Si dos referencias son la misma fila de la receta.
+ *
+ * No alcanza con comparar los objetos: cada vez que el backend contesta un
+ * guardado, el estado se rearma con las filas que devuelve, que son objetos
+ * nuevos. Una referencia guardada de antes (la fila que se esta editando, o la
+ * que abrio el modal de componentes) deja de ser identica a la del estado, y la
+ * modificacion se perdia sin avisar. El id sobrevive a ese viaje.
+ */
+const mismaFila = (a, b) => {
+  if (!a || !b) return false;
+  return a.id && b.id ? a.id === b.id : a === b;
+};
+
 // Lo que ya estaba cargado (sin "seccion") pertenece a la masa.
 const SECCION_POR_DEFECTO = "masa";
 const buscarSeccion = (id) => SECCIONES.find((s) => s.id === id) || SECCIONES[0];
 
 // Las secciones propias de una receta se declaran con "soloEn"; el resto las
 // tienen todas.
-const esDeLaReceta = (seccion, receta) =>
-  !seccion.soloEn ||
-  seccion.soloEn.some((slug) => normalizar(slug) === normalizar(receta?.slug || receta?.id));
+const esDeLaReceta = (seccion, receta) => {
+  const slug = normalizar(receta?.slug || receta?.id);
+  // Cada receta declara en su dato que tarjetas no lleva (una tableta no tiene
+  // ingredientes por unidad).
+  if (receta?.sinSecciones?.includes(seccion.id)) return false;
+  return !seccion.soloEn || seccion.soloEn.some((s) => normalizar(s) === slug);
+};
 
 // Las tarjetas de la portada: las que llevan "dentroDe" no son tarjetas, se
 // dibujan como una tabla mas dentro de su seccion.
@@ -145,7 +185,9 @@ const claseColumna = (seccion, indice, total) =>
 
 // Texto plano del titulo, con el detalle entre parentesis si lo tiene.
 const tituloCompleto = (seccion, receta) =>
-  seccion.detalle ? `${seccion.titulo} (${seccion.detalle(receta)})` : seccion.titulo;
+  seccion.detalle
+    ? `${tituloDeSeccion(seccion, receta)} (${seccion.detalle(receta)})`
+    : tituloDeSeccion(seccion, receta);
 
 const FORM_INICIAL = {
   seccion: SECCION_POR_DEFECTO,
@@ -208,6 +250,14 @@ const RecetaDetalle = () => {
   }, [recetas, slugActual]);
 
   const seccionesVisibles = useMemo(() => seccionesDeReceta(receta), [receta]);
+
+  // Un producto puede agrupar variedades (las tabletas): en ese caso al abrirlo
+  // se ven esas tarjetas y no las secciones. Y una variedad vuelve a su
+  // producto, no al listado general.
+  const variedades = variedadesDe(slugActual);
+  const anchoPortada = variedades.length > 0 ? "1100px" : ANCHO_BLOQUE;
+  const productoPadre = productoDeVariedad(slugActual);
+  const volverA = productoPadre ? `/recetas/${productoPadre}` : "/recetas";
 
   // Sin parametro de seccion se muestran las tarjetas; con el, la tabla. Una
   // seccion que no es de esta receta se ignora y se vuelve a las tarjetas.
@@ -278,6 +328,12 @@ const RecetaDetalle = () => {
   // monto que ya tenia la receta.
   const mensualMO = (personaMO ? valorMensual(personaMO) : 0) || mensualGuardado;
 
+  // Las recetas que se miden por hora (el mendiant, en latas por hora) usan el
+  // valor hora del legajo asignado; las demas, su sueldo mensual. El valor hora
+  // baja del mismo mensual: mensual -> semanal -> jornal -> hora.
+  const porHora = (receta.unidadRinde || "alfajores") !== "alfajores";
+  const pagoMO = porHora ? (personaMO ? valorHora(personaMO) : 0) : mensualMO;
+
   const guardarManoDeObra = (cambios) => {
     const proximo = {
       fecha: moBorrador.fecha || fechaHoy(),
@@ -298,9 +354,15 @@ const RecetaDetalle = () => {
     guardarReceta({ ...receta, manoDeObra: proximo });
   };
 
+  const normalizarProducidos = (valor) => {
+    const numero = parseFloat(String(valor).replace(",", ".")) || 0;
+    const factor = porHora ? 10 : 1;
+    return Math.max(0, Math.round(numero * factor) / factor);
+  };
+
   const cambiarProducidos = (delta) => {
     const actual = Number(moBorrador.alfajoresProducidos) || 0;
-    const nuevo = Math.max(0, actual + delta);
+    const nuevo = normalizarProducidos(actual + delta);
     if (nuevo === actual) return;
     guardarManoDeObra({ alfajoresProducidos: nuevo });
   };
@@ -308,7 +370,8 @@ const RecetaDetalle = () => {
   const costoManoObra = (() => {
     const producidos = Number(moBorrador.alfajoresProducidos) || 0;
     if (producidos <= 0) return 0;
-    return mensualMO / producidos;
+    // Por hora: valor hora / unidades por hora. Por mes: sueldo / produccion.
+    return pagoMO / producidos;
   })();
 
   // Filas de una seccion, filtradas y ordenadas. Se usa tanto para la tabla
@@ -346,7 +409,13 @@ const RecetaDetalle = () => {
       ...prev,
       ingredienteId: encontrado ? encontrado.id : "",
       nombre: encontrado ? encontrado.nombre : "",
-      unidad: encontrado ? encontrado.unidad || prev.unidad : prev.unidad,
+      // La unidad del alta es la de compra (casi siempre kg) y la receta se
+      // escribe en gramos, asi que no se pisa. En packaging si conviene traerla
+      // ("rollo", "caja"), que ahi es la misma con la que se usa.
+      unidad:
+        seccionForm.catalogo === "packaging" && encontrado?.unidad
+          ? encontrado.unidad
+          : prev.unidad,
     }));
 
     if (errorIngrediente) setErrorIngrediente("");
@@ -420,7 +489,7 @@ const RecetaDetalle = () => {
         observaciones: form.observaciones ? form.observaciones.trim() : "",
       };
 
-      const indiceMO = itemEditando ? lista.indexOf(itemEditando) : -1;
+      const indiceMO = itemEditando ? lista.findIndex((x) => mismaFila(x, itemEditando)) : -1;
       if (indiceMO !== -1) lista[indiceMO] = nuevoItem;
       else lista.push(nuevoItem);
 
@@ -454,7 +523,7 @@ const RecetaDetalle = () => {
     // estar en la masa y ademas aparecer por alfajor.
     const duplicado = lista.some(
       (item) =>
-        item !== itemEditando &&
+        !mismaFila(item, itemEditando) &&
         buscarSeccion(item.seccion).id === form.seccion &&
         normalizar(item.nombre) === normalizar(nombreLimpio)
     );
@@ -474,7 +543,7 @@ const RecetaDetalle = () => {
       observaciones: form.observaciones ? form.observaciones.trim() : "",
     };
 
-    const indice = itemEditando ? lista.indexOf(itemEditando) : -1;
+    const indice = itemEditando ? lista.findIndex((x) => mismaFila(x, itemEditando)) : -1;
     if (indice !== -1) {
       lista[indice] = nuevoItem;
     } else {
@@ -510,10 +579,10 @@ const RecetaDetalle = () => {
     }).then((result) => {
       if (!result.isConfirmed) return;
 
-      const lista = (receta.ingredientes || []).filter((x) => x !== item);
+      const lista = (receta.ingredientes || []).filter((x) => !mismaFila(x, item));
       guardarReceta({ ...receta, ingredientes: lista });
 
-      if (itemEditando === item) handleCerrarModal();
+      if (mismaFila(itemEditando, item)) handleCerrarModal();
     });
   };
 
@@ -614,9 +683,11 @@ const RecetaDetalle = () => {
         observaciones: (c.observaciones || "").trim(),
       }));
 
-    const total = totalComponentes(componentes);
+    // El total que pasa a ser la cantidad de la fila se redondea a dos
+    // decimales: es lo mismo que se ve en la tabla.
+    const total = Math.round(totalComponentes(componentes) * 100) / 100;
     const lista = (receta.ingredientes || []).map((x) =>
-      x === itemComponentes
+      mismaFila(x, itemComponentes)
         ? { ...x, componentes, ...(componentes.length > 0 && { cantidad: total }) }
         : x
     );
@@ -631,18 +702,26 @@ const RecetaDetalle = () => {
    */
   const tablaProporcional = (seccion) => {
     const filasSeccion = filasDe(seccion);
-    // La tabla de la izquierda esta escrita para los gramos de referencia de la
-    // seccion (740 gr la pasta, 240 gr el praline): esa es la base.
-    const base = Number(seccion.gramosBase) || 0;
-    const objetivo = Number(gramosBorrador[seccion.id]) || 0;
+    // La tabla de la izquierda esta escrita para una base: los gramos de
+    // referencia de la seccion (740 gr la pasta, 240 gr el praline) o los
+    // alfajores que salen de esa tanda (20 el bano de chocolate blanco).
+    const porAlfajores = Number(seccion.alfajoresBase) || 0;
+    const base = porAlfajores || Number(seccion.gramosBase) || 0;
+    // Escrita por alfajor no hay objetivo que elegir: es siempre uno.
+    const objetivo = porAlfajores ? 1 : Number(gramosBorrador[seccion.id]) || 0;
     const factor = base > 0 && objetivo > 0 ? objetivo / base : null;
+    const detalle = porAlfajores
+      ? `1 ${unidadSingular(receta)}`
+      : objetivo > 0
+        ? `${numero(objetivo)} gr`
+        : "— gr";
 
     return (
       <div className="mush-card mush-card-anidada p-3">
         <h5 className="text-white fw-bold mb-3" style={{ fontSize: "0.9rem" }}>
           {seccion.titulo}
           <span className="text-secondary fw-normal ms-2" style={{ fontSize: "0.8rem" }}>
-            ({objetivo > 0 ? `${formatearCantidad(objetivo)} gr` : "— gr"})
+            ({detalle})
           </span>
         </h5>
 
@@ -676,7 +755,7 @@ const RecetaDetalle = () => {
                     </td>
                     <td className="text-end">
                       <span className="text-white mush-dato" style={{ fontSize: "0.82rem" }}>
-                        {factor ? formatearCantidad((Number(item.cantidad) || 0) * factor) : "—"}
+                        {factor ? numero((Number(item.cantidad) || 0) * factor) : "—"}
                       </span>
                     </td>
                     <td>
@@ -779,7 +858,7 @@ const RecetaDetalle = () => {
                       </strong>
                     </td>
                     <td>
-                      <span className="text-white fw-bold small">{item.cantidad}</span>
+                      <span className="text-white fw-bold small">{numero(item.cantidad)}</span>
                     </td>
                     <td>
                       <span
@@ -854,11 +933,11 @@ const RecetaDetalle = () => {
       >
         {/* Titulo arriba. El boton volver se posiciona aparte para que el
             titulo quede centrado de verdad. */}
-        <div className="mx-auto w-100 position-relative mb-4" style={{ maxWidth: ANCHO_BLOQUE }}>
+        <div className="mx-auto w-100 position-relative mb-4" style={{ maxWidth: anchoPortada }}>
           <Link
-            to="/recetas"
+            to={volverA}
             className="btn btn-sm btn-outline-secondary py-1 px-2 text-white d-inline-flex align-items-center gap-1 rounded-3 position-absolute start-0 top-50 translate-middle-y"
-            title="Volver al listado de recetas"
+            title="Volver"
           >
             <i className="bi bi-arrow-left"></i>
           </Link>
@@ -870,8 +949,32 @@ const RecetaDetalle = () => {
             Mismo ancho y grilla que el listado de productos (Recetas.jsx) */}
         <div
           className="mx-auto w-100 d-flex flex-column justify-content-center flex-grow-1"
-          style={{ maxWidth: ANCHO_BLOQUE }}
+          style={{ maxWidth: anchoPortada }}
         >
+          {/* Un producto con variedades muestra esas tarjetas: cada una es una
+              receta con sus propias secciones. */}
+          {variedades.length > 0 ? (
+            <div className="row row-cols-2 row-cols-sm-3 row-cols-lg-5 g-2 g-sm-3">
+              {variedades.map((v) => (
+                <div className="col" key={v.slug}>
+                  <Link
+                    to={`/recetas/${v.slug}`}
+                    className={`mush-card mush-card-hover text-decoration-none ${ESCALAS.densa.padding} d-flex flex-column align-items-center justify-content-center text-center border border-secondary border-opacity-25 rounded-4 w-100 shadow-sm`}
+                    style={{ minHeight: ESCALAS.densa.alto, height: "100%" }}
+                    title={v.nombre}
+                  >
+                    <span className={ESCALAS.densa.emoji}>{v.imagen}</span>
+                    <strong
+                      className="text-white fw-bold w-100 lh-sm"
+                      style={{ fontSize: ESCALAS.densa.texto }}
+                    >
+                      {v.nombre}
+                    </strong>
+                  </Link>
+                </div>
+              ))}
+            </div>
+          ) : (
           <div className="row g-2 g-sm-3">
             {seccionesVisibles.map((s, indice) => (
               <div className={claseColumna(s, indice, seccionesVisibles.length)} key={s.id}>
@@ -883,13 +986,14 @@ const RecetaDetalle = () => {
                 >
                   <span className={ESCALAS[s.escala].emoji}>{s.emoji}</span>
                   <strong className="text-white fw-bold w-100 lh-sm" style={{ fontSize: ESCALAS[s.escala].texto }}>
-                    {s.titulo}
+                    {tituloDeSeccion(s, receta)}
                     {s.detalle && <span className="fw-normal"> ({s.detalle(receta)})</span>}
                   </strong>
                 </Link>
               </div>
             ))}
           </div>
+          )}
         </div>
       </div>
     );
@@ -940,7 +1044,7 @@ const RecetaDetalle = () => {
         ),
       },
       {
-        etiqueta: "Mensual",
+        etiqueta: porHora ? "Hora" : "Mensual",
         crecer: 1.2,
         // Sale del legajo elegido en Personal, no se escribe a mano.
         contenido: (
@@ -948,12 +1052,12 @@ const RecetaDetalle = () => {
             className="form-control form-control-sm mush-input py-1 px-2 text-center fw-bold mush-dato d-flex align-items-center justify-content-center"
             style={{ fontSize: "0.85rem" }}
           >
-            {moneda(mensualMO)}
+            {moneda(pagoMO, porHora ? 2 : 0)}
           </div>
         ),
       },
       {
-        etiqueta: "Alfajores producidos",
+        etiqueta: etiquetaProducidos(receta),
         crecer: 1.6,
         contenido: (
           <div className="d-flex align-items-center justify-content-center gap-1">
@@ -961,7 +1065,7 @@ const RecetaDetalle = () => {
               type="button"
               className="btn btn-sm btn-outline-secondary text-white px-2 d-flex align-items-center"
               style={{ height: "31px" }}
-              onClick={() => cambiarProducidos(-1)}
+              onClick={() => cambiarProducidos(porHora ? -0.5 : -1)}
               disabled={(Number(moBorrador.alfajoresProducidos) || 0) <= 0}
               title="Bajar"
             >
@@ -970,6 +1074,7 @@ const RecetaDetalle = () => {
             <input
               type="number"
               min="0"
+              step={porHora ? "0.1" : "1"}
               className="form-control form-control-sm mush-input mush-sin-spinner py-1 px-1 text-center fw-bold"
               style={{ width: "72px", fontSize: "0.85rem" }}
               value={moBorrador.alfajoresProducidos}
@@ -978,7 +1083,7 @@ const RecetaDetalle = () => {
               }
               onBlur={() =>
                 guardarManoDeObra({
-                  alfajoresProducidos: Math.max(0, parseInt(moBorrador.alfajoresProducidos, 10) || 0),
+                  alfajoresProducidos: normalizarProducidos(moBorrador.alfajoresProducidos),
                 })
               }
             />
@@ -986,7 +1091,7 @@ const RecetaDetalle = () => {
               type="button"
               className="btn btn-sm btn-outline-secondary text-white px-2 d-flex align-items-center"
               style={{ height: "31px" }}
-              onClick={() => cambiarProducidos(1)}
+              onClick={() => cambiarProducidos(porHora ? 0.5 : 1)}
               title="Subir"
             >
               +
@@ -1011,7 +1116,7 @@ const RecetaDetalle = () => {
         ),
       },
       {
-        etiqueta: "Costo M.O por alfajor",
+        etiqueta: etiquetaCostoMO(receta),
         crecer: 1.7,
         // Valor calculado: va en verde para distinguirlo de los cargados.
         contenido: (
@@ -1037,7 +1142,11 @@ const RecetaDetalle = () => {
             >
               <i className="bi bi-arrow-left"></i>
             </Link>
-            <h2 className="mush-display text-white mb-0">{seccionActiva.titulo}</h2>
+            <h2 className="mush-display text-white mb-0">
+              {tituloDeSeccion(seccionActiva, receta)}
+            </h2>
+            <span className="mush-display text-secondary fs-2">-</span>
+            <span className="mush-display text-dulce fs-2">{receta.nombre}</span>
           </div>
         </div>
 
@@ -1115,14 +1224,15 @@ const RecetaDetalle = () => {
               <i className="bi bi-arrow-left"></i>
             </Link>
             <h2 className="mush-display text-white mb-0">
-              {seccionActiva.titulo}
+              {tituloDeSeccion(seccionActiva, receta)}
               {seccionActiva.detalle && (
                 <span className="text-secondary fw-normal ms-2 text-lowercase" style={{ fontSize: "1rem" }}>
                   ({seccionActiva.detalle(receta)})
                 </span>
               )}
             </h2>
-            <span className="mush-display text-dulce fs-2 ms-4">{receta.nombre}</span>
+            <span className="mush-display text-secondary fs-2">-</span>
+            <span className="mush-display text-dulce fs-2">{receta.nombre}</span>
           </div>
         </div>
 
@@ -1143,27 +1253,31 @@ const RecetaDetalle = () => {
                     claseBoton: "btn-mush-outline",
                   })}
                 </div>
-                <div className="align-self-center" style={{ width: "110px", flexShrink: 0 }}>
-                  <label
-                    className="form-label text-secondary fw-semibold mb-1 d-block text-center"
-                    style={{ fontSize: "0.78rem" }}
-                    htmlFor={`gramos-${s.id}`}
-                  >
-                    Grs
-                  </label>
-                  <input
-                    id={`gramos-${s.id}`}
-                    type="text"
-                    inputMode="decimal"
-                    className="form-control form-control-sm mush-input mush-dato py-1 px-2 text-center"
-                    style={{ fontSize: "0.85rem" }}
-                    placeholder="0"
-                    value={gramosBorrador[s.id] ?? ""}
-                    onChange={(e) => cambiarGramos(s.id, e.target.value)}
-                    autoComplete="off"
-                    spellCheck="false"
-                  />
-                </div>
+                {/* La caja de gramos es para las tablas escritas en gramos: la
+                    que esta escrita por tanda de alfajores no elige objetivo. */}
+                {s.gramosBase ? (
+                  <div className="align-self-center" style={{ width: "110px", flexShrink: 0 }}>
+                    <label
+                      className="form-label text-secondary fw-semibold mb-1 d-block text-center"
+                      style={{ fontSize: "0.78rem" }}
+                      htmlFor={`gramos-${s.id}`}
+                    >
+                      Grs
+                    </label>
+                    <input
+                      id={`gramos-${s.id}`}
+                      type="text"
+                      inputMode="decimal"
+                      className="form-control form-control-sm mush-input mush-dato py-1 px-2 text-center"
+                      style={{ fontSize: "0.85rem" }}
+                      placeholder="0"
+                      value={gramosBorrador[s.id] ?? ""}
+                      onChange={(e) => cambiarGramos(s.id, e.target.value)}
+                      autoComplete="off"
+                      spellCheck="false"
+                    />
+                  </div>
+                ) : null}
 
                 <div style={{ width: "330px", flexShrink: 0 }}>{tablaProporcional(s)}</div>
               </div>
@@ -1293,7 +1407,7 @@ const RecetaDetalle = () => {
                       </td>
                       <td className="text-center">
                         <span className="text-white mush-dato fw-bold" style={{ fontSize: "0.85rem" }}>
-                          {formatearCantidad(totalComponentes(componentesBorrador))}
+                          {numero(totalComponentes(componentesBorrador))}
                         </span>
                       </td>
                       <td>

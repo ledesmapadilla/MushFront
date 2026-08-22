@@ -52,10 +52,7 @@ const Inicio = () => {
 
             {/* Botones de acción rápida */}
             <div className="d-flex flex-wrap gap-2">
-              <Link to="/calculadora" className="btn-mush">
-                <i className="bi bi-calculator"></i> Calculadora de Tandas
-              </Link>
-              <Link to="/produccion" className="btn-mush-outline">
+              <Link to="/produccion" className="btn-mush">
                 <i className="bi bi-gear-wide-connected"></i> Nueva Tanda de Producción
               </Link>
               <Link to="/stock" className="btn-mush-ghost">
@@ -181,8 +178,8 @@ const Inicio = () => {
             <span className="mush-kicker">Catálogo & Fichas Técnicas</span>
             <h4 className="mush-display text-white mb-0">Variedades de Alfajores</h4>
           </div>
-          <Link to="/calculadora" className="btn-mush-outline btn-sm">
-            Ver Calculadora <i className="bi bi-arrow-right"></i>
+          <Link to="/recetas" className="btn-mush-outline btn-sm">
+            Ver Recetas <i className="bi bi-arrow-right"></i>
           </Link>
         </div>
 
@@ -225,10 +222,10 @@ const Inicio = () => {
 
                   {/* Botón ver receta */}
                   <Link
-                    to={`/calculadora?variedad=${receta.id}`}
+                    to={`/recetas/${receta.id}`}
                     className="btn btn-sm btn-outline-secondary w-100 text-white d-flex align-items-center justify-content-center gap-1"
                   >
-                    <i className="bi bi-calculator"></i> Calcular Tanda
+                    <i className="bi bi-book"></i> Ver Receta
                   </Link>
                 </div>
               </div>
