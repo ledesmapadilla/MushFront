@@ -746,6 +746,15 @@ header.sticky-top {
   color: var(--mush-texto) !important;
 }
 
+/* Lo que acompana a un valor dentro de una celda (una nota, la ganancia). Va
+   apoyado a la derecha para no correr del centro al valor. */
+.mush-tabla td .mush-celda-nota {
+  position: absolute;
+  right: 0.55rem;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
 /* Raya que separa dos cuentas escritas una al lado de la otra. */
 .mush-division-vertical {
   align-self: stretch;
@@ -825,18 +834,18 @@ header.sticky-top {
 
 /* Fila que abre un grupo dentro de una tabla (las variedades de un producto).
    Va sobre fondo de acento para que se vea que lo que sigue cuelga de ahi. */
-/* El caramelo quedo para los campos que se completan, asi que el titulo de un
-   grupo va en una superficie neutra y se destaca por los bordes. */
+/* El titulo de un grupo va en azul: el caramelo quedo para los campos que se
+   completan y una superficie neutra se le parecia demasiado. */
 .mush-tabla .mush-fila-grupo td {
-  background-color: var(--mush-superficie-elevada);
-  border-top: 2px solid var(--mush-borde) !important;
-  border-bottom: 2px solid var(--mush-borde) !important;
+  background-color: var(--mush-info-bg);
+  border-top: 2px solid var(--mush-info) !important;
+  border-bottom: 2px solid var(--mush-info) !important;
 }
 
 .mush-tabla .mush-fila-grupo .mush-kicker {
   font-size: 0.8rem;
   letter-spacing: 0.14em;
-  color: var(--mush-texto);
+  color: var(--mush-info);
 }
 
 .mush-tabla .mush-col-separada {

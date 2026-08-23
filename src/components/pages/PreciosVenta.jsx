@@ -2,7 +2,16 @@ import { useState, useEffect, useMemo } from "react";
 import { useMush } from "../../context/MushContext";
 import { productosDeCatalogo, variedadesDe } from "../../data/productos";
 import { buscarReceta, costearProducto } from "../../utils/costos";
-import { moneda } from "../../utils/sueldos";
+import { moneda, fechaLegible } from "../../utils/sueldos";
+import {
+  anotarPrecios,
+  COLUMNAS_HISTORIAL,
+  historialDeReceta,
+  margenReal,
+  precioDesdeMargen,
+  preciosDeProducto,
+  ultimaActualizacion,
+} from "../../utils/precios";
 
 /**
  * Precios de venta: una fila por producto, con el costo al lado de los dos
@@ -83,24 +92,6 @@ const ALTO_CABECERA = "66px";
 const ALTO_FILA = "34px";
 const ALTO_GRUPO = "34px";
 
-/**
- * Precio que sale de un costo y el margen que se quiere dejar:
- *
- *              costo
- *   precio = -----------
- *            1 - margen
- *
- * El margen se escribe en porcentaje. Con 100 o mas no hay precio posible (no
- * se puede dejar todo el precio de ganancia), asi que devuelve null.
- *
- * El resultado se redondea a la centena de arriba, que es como se cobra.
- */
-const precioDesdeMargen = (costo, margen) => {
-  const deseada = Number(margen) / 100;
-  if (!costo || !deseada || deseada >= 1) return null;
-  return redondearACentena(costo / (1 - deseada));
-};
-
 // Una cuenta escrita como se lee: el nombre, y a la derecha el numerador sobre
 // el denominador separados por una raya.
 const formula = (nombre, arriba, abajo) => (
@@ -122,13 +113,10 @@ const formula = (nombre, arriba, abajo) => (
   </span>
 );
 
-// Un porcentaje que puede no estar: se lee "-" igual que un importe vacio.
+// Un porcentaje, redondeado al entero. Si no esta se lee "-", igual que un
+// importe vacio.
 const porcentaje = (valor) =>
-  valor === null || valor === undefined ? "-" : `${valor.toFixed(1)} %`;
-
-// El precio de lista se cobra redondeado a la centena de arriba: 3458,20 se
-// cobra 3500. Lo que se gana de mas queda a favor.
-const redondearACentena = (valor) => Math.ceil(valor / 100) * 100;
+  valor === null || valor === undefined ? "-" : `${Math.round(valor)} %`;
 
 // Las filas del modal, en el orden en que se leen. Las que llevan campo son
 // editables (el margen) o calculadas (el precio y su ganancia).
@@ -147,6 +135,11 @@ const FILAS_MODAL = [
   { titulo: "Dto. revendedor", campoMargen: "dtoRevendedor" },
   { titulo: "Precio revendedor", canal: "revendedor" },
 ];
+
+// El precio del revendedor: el publico con su descuento. Se usa tanto para
+// mostrarlo como para anotarlo en el historial.
+const precioDeRevendedor = (costo, { margenPublico, dtoRevendedor }) =>
+  preciosDeProducto(costo, { margenPublico, dtoRevendedor }).revendedor;
 
 const PreciosVenta = () => {
   const { alfajores, recetas, ingredientes, packaging, personal, guardarReceta } = useMush();
@@ -186,6 +179,13 @@ const PreciosVenta = () => {
 
   // La fila que se esta mirando en el modal de calculo (null = cerrado).
   const [filaModal, setFilaModal] = useState(null);
+  // Y aparte se puede ver como fueron cambiando los datos.
+  const [verHistorial, setVerHistorial] = useState(false);
+
+  const abrirModal = (fila) => {
+    setFilaModal(fila);
+    setVerHistorial(false);
+  };
 
   // Borrador local para poder tipear sin guardar en cada tecla.
   const [borrador, setBorrador] = useState({});
@@ -209,11 +209,32 @@ const PreciosVenta = () => {
   const escribir = (slug, campo, valor) =>
     setBorrador((prev) => ({ ...prev, [`${slug}:${campo}`]: valor.replace(/[^0-9.,]/g, "") }));
 
+  /**
+   * Guarda un valor y anota el cambio.
+   *
+   * Cada cambio queda en `precios.historial` como una entrada nueva, igual que
+   * el historial de precios de un ingrediente: asi se puede ver cuando se movio
+   * cada numero, en vez de solo el ultimo.
+   */
   const guardar = (fila, campo) => {
     if (!fila.receta) return;
+
+    const anterior = fila.receta.precios || {};
     const escrito = valorDe(fila.slug, campo);
     const numero = escrito === "" ? "" : Number(String(escrito).replace(",", ".")) || 0;
-    const precios = { ...(fila.receta.precios || {}), [campo]: numero };
+    // Salir del campo sin haberlo tocado no es un cambio.
+    if (String(anterior[campo] ?? "") === String(numero)) return;
+
+    // La anotacion es una foto de como quedo el precio, asi que se arma con el
+    // dato nuevo ya puesto.
+    const cambiado = { ...anterior, [campo]: numero };
+    const costo = fila.costo.total;
+    const precios = anotarPrecios(cambiado, {
+      costo,
+      publico: precioDesdeMargen(costo, cambiado.margenPublico),
+      revendedor: precioDeRevendedor(costo, cambiado),
+    });
+
     guardarReceta({ ...fila.receta, precios });
   };
 
@@ -233,12 +254,13 @@ const PreciosVenta = () => {
     if (cantidad === null) return null;
 
     const publico = precioDesdeMargen(fila.costo.total, numeroDe(fila, "margenPublico"));
-    if (publico === null) return null;
-    if (canal === "publico") return publico * cantidad;
+    if (canal === "publico") return publico === null ? null : publico * cantidad;
 
-    const descuento = numeroDe(fila, "dtoRevendedor") / 100;
-    if (descuento >= 1) return null;
-    return redondearACentena(publico * (1 - descuento)) * cantidad;
+    const revendedor = precioDeRevendedor(fila.costo.total, {
+      margenPublico: numeroDe(fila, "margenPublico"),
+      dtoRevendedor: numeroDe(fila, "dtoRevendedor"),
+    });
+    return revendedor === null ? null : revendedor * cantidad;
   };
 
   // Por unidad es uno; por caja, lo que entre en la caja (sin cargar, no hay
@@ -259,11 +281,8 @@ const PreciosVenta = () => {
   // Lo que queda de ganancia sobre el precio que se termina cobrando. No es el
   // porcentaje que se pidio: el redondeo y el descuento lo mueven.
   // El porcentaje no cambia entre unidad y caja: la caja es la unidad repetida.
-  const margenRealDeCanal = (fila, canal) => {
-    const precio = precioDeCanal(fila, canal);
-    const costo = costoDeFila(fila);
-    return precio && costo !== null ? ((precio - costo) / precio) * 100 : null;
-  };
+  const margenRealDeCanal = (fila, canal) =>
+    margenReal(precioDeCanal(fila, canal), costoDeFila(fila));
 
   const campo = (fila, id, ancho) => (
     <input
@@ -344,7 +363,6 @@ const PreciosVenta = () => {
           paddingBottom: "70px",
         }}
       >
-        {/* Header, con el switch que cambia la unidad de toda la tabla */}
         {/* El titulo queda centrado en la pagina y el switch, centrado en lo que
             sobra a su derecha. */}
         <div className="d-flex align-items-center mb-1">
@@ -398,6 +416,17 @@ const PreciosVenta = () => {
             >
               <thead>
                 <tr className="text-center" style={{ height: ALTO_CABECERA }}>
+                  {/* Cuando se actualizo por ultima vez el precio */}
+                  <th style={{ width: "96px" }}>
+                    {/* El titulo hereda mayusculas y espaciado de los encabezados:
+                        con un texto largo eso solo lo agranda. */}
+                    <span
+                      className="mush-th-caja"
+                      style={{ fontSize: "0.56rem", letterSpacing: "normal" }}
+                    >
+                      Fecha de actualizacion
+                    </span>
+                  </th>
                   <th>
                     <span className="mush-th-caja">Producto</span>
                   </th>
@@ -431,7 +460,7 @@ const PreciosVenta = () => {
                   // El titulo de un producto que agrupa variedades
                   fila.titulo ? (
                     <tr key={fila.titulo} className="mush-fila-grupo" style={{ height: ALTO_GRUPO }}>
-                      <td colSpan={PRECIOS.length + 4}>
+                      <td colSpan={PRECIOS.length + 5}>
                         <span className="mush-kicker d-inline-flex align-items-center gap-2">
                           <span style={{ fontSize: "0.85rem" }}>{fila.imagen}</span>
                           {fila.titulo}
@@ -444,6 +473,14 @@ const PreciosVenta = () => {
                       className={fila.corte ? "mush-fila-corte" : ""}
                       style={{ height: ALTO_FILA }}
                     >
+                      {/* La fecha del ultimo cambio de precio, venga de esta
+                          pantalla o de un cambio de costo. */}
+                      <td className="text-center">
+                        <span className="mush-dato text-secondary" style={{ fontSize: "0.6rem" }}>
+                          {fechaLegible(ultimaActualizacion(fila.receta)) || "-"}
+                        </span>
+                      </td>
+
                       <td>
                         <span className="d-flex align-items-center gap-2">
                           <span style={{ fontSize: "0.85rem" }}>{fila.imagen}</span>
@@ -490,7 +527,7 @@ const PreciosVenta = () => {
                           type="button"
                           className="btn btn-sm btn-outline-secondary py-0 px-2 text-white d-inline-flex align-items-center"
                           style={{ fontSize: "0.72rem", minHeight: "20px" }}
-                          onClick={() => setFilaModal(fila)}
+                          onClick={() => abrirModal(fila)}
                           title={`Calculo de precio de ${fila.nombre}`}
                         >
                           Ver
@@ -546,7 +583,7 @@ const PreciosVenta = () => {
         >
           <div
             className="modal-dialog modal-dialog-centered"
-            style={{ maxWidth: "460px" }}
+            style={{ maxWidth: verHistorial ? "760px" : "460px" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="modal-content mush-card p-3 p-sm-4 rounded-4 shadow-lg border border-secondary border-opacity-25">
@@ -574,67 +611,138 @@ const PreciosVenta = () => {
                 {formula("Gcia. real (revend.) =", "Precio rev. - Costo", "Precio rev.")}
               </div>
 
-              <table className="table mush-tabla mush-tabla-compacta align-middle mb-0">
-                <tbody>
-                  {FILAS_MODAL.map(({ titulo, valor, esCosto, campoMargen, canal, canalMargen, nota }) => (
-                    <tr key={titulo} style={{ height: ALTO_FILA }}>
-                      <td style={{ width: "42%" }}>
-                        <span className="text-secondary" style={{ fontSize: "0.75rem" }}>
-                          {titulo}
-                        </span>
-                      </td>
-                      <td className="text-center">
-                        {campoMargen ? (
-                          <span className="d-flex align-items-center justify-content-center gap-1">
-                            {campo(filaModal, campoMargen, "48px")}
-                            <span className="text-secondary" style={{ fontSize: "0.72rem" }}>
-                              %
+              {verHistorial ? (
+                /* Una fila por fecha con todo lo que hace al precio ese dia:
+                   asi se compara un dia contra otro de un vistazo. */
+                <div className="mush-scroll-tabla" style={{ maxHeight: "300px" }}>
+                  <table className="table mush-tabla mush-tabla-compacta align-middle mb-0">
+                    <thead>
+                      <tr className="text-center">
+                        <th style={{ width: "84px" }}>
+                          <span className="mush-th-caja" style={{ fontSize: "0.62rem" }}>
+                            Fecha
+                          </span>
+                        </th>
+                        {COLUMNAS_HISTORIAL.map(({ id, titulo }) => (
+                          <th key={id}>
+                            <span className="mush-th-caja" style={{ fontSize: "0.62rem" }}>
+                              {titulo}
                             </span>
-                            {nota && (
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historialDeReceta(filaModal.receta).length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={COLUMNAS_HISTORIAL.length + 1}
+                            className="text-center py-4 text-secondary"
+                          >
+                            Todavia no hubo cambios de precio.
+                          </td>
+                        </tr>
+                      ) : (
+                        historialDeReceta(filaModal.receta).map((dia) => (
+                          <tr key={dia.fecha} style={{ height: ALTO_FILA }}>
+                            <td className="text-center">
                               <span
-                                className="text-secondary fst-italic ms-1"
+                                className="mush-dato text-secondary"
                                 style={{ fontSize: "0.72rem" }}
                               >
-                                {nota}
+                                {fechaLegible(dia.fecha)}
                               </span>
-                            )}
+                            </td>
+                            {COLUMNAS_HISTORIAL.map(({ id, formato }) => (
+                              <td key={id} className="text-center">
+                                <span
+                                  className="mush-dato text-white"
+                                  style={{ fontSize: "0.72rem" }}
+                                >
+                                  {formato === "moneda"
+                                    ? moneda(dia[id], 2)
+                                    : formato === "porcentaje"
+                                      ? porcentaje(dia[id])
+                                      : dia[id] || "-"}
+                                </span>
+                              </td>
+                            ))}
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <table className="table mush-tabla mush-tabla-compacta align-middle mb-0">
+                  <tbody>
+                    {FILAS_MODAL.map(({ titulo, valor, esCosto, campoMargen, canal, canalMargen, nota }) => (
+                      <tr key={titulo} style={{ height: ALTO_FILA }}>
+                        <td style={{ width: "42%" }}>
+                          <span className="text-secondary" style={{ fontSize: "0.75rem" }}>
+                            {titulo}
                           </span>
-                        ) : canal ? (
-                          <span className="d-flex align-items-center justify-content-center gap-3">
-                            <span className="mush-dato text-white" style={{ fontSize: "0.8rem" }}>
-                              {moneda(precioDeCanal(filaModal, canal), 2)}
-                            </span>
-                            <span className="text-secondary" style={{ fontSize: "0.72rem" }}>
-                              ganancia:{" "}
-                              <span className="mush-dato text-ok">
-                                {moneda(gananciaDeCanal(filaModal, canal), 2)}
+                        </td>
+                        {/* El valor va centrado en la celda; lo que lo acompana
+                            (la nota) se apoya a la derecha y no lo corre del
+                            centro. Los precios no: van con su ganancia al lado. */}
+                        <td className="text-center" style={{ position: "relative" }}>
+                          {campoMargen ? (
+                            <span className="d-flex align-items-center justify-content-center gap-1">
+                              {campo(filaModal, campoMargen, "48px")}
+                              <span className="text-secondary" style={{ fontSize: "0.72rem" }}>
+                                %
                               </span>
                             </span>
-                          </span>
-                        ) : canalMargen ? (
-                          <span className="d-flex align-items-center justify-content-center gap-1">
+                          ) : canal ? (
+                            <span className="d-flex align-items-center justify-content-start gap-3 ps-2">
+                              <span className="mush-dato text-white" style={{ fontSize: "0.8rem" }}>
+                                {moneda(precioDeCanal(filaModal, canal), 2)}
+                              </span>
+                              <span className="text-secondary" style={{ fontSize: "0.72rem" }}>
+                                ganancia:{" "}
+                                <span className="mush-dato text-ok">
+                                  {moneda(gananciaDeCanal(filaModal, canal), 2)}
+                                </span>
+                              </span>
+                            </span>
+                          ) : canalMargen ? (
                             <span className="mush-dato text-white" style={{ fontSize: "0.8rem" }}>
                               {porcentaje(margenRealDeCanal(filaModal, canalMargen))}
                             </span>
-                            {nota && (
-                              <span
-                                className="text-secondary fst-italic ms-1"
-                                style={{ fontSize: "0.72rem" }}
-                              >
-                                {nota}
-                              </span>
-                            )}
-                          </span>
-                        ) : (
-                          <span className="mush-dato text-white" style={{ fontSize: "0.8rem" }}>
-                            {esCosto ? moneda(costoDeFila(filaModal), 2) : valor(filaModal, porCaja)}
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                          ) : (
+                            <span className="mush-dato text-white" style={{ fontSize: "0.8rem" }}>
+                              {esCosto
+                                ? moneda(costoDeFila(filaModal), 2)
+                                : valor(filaModal, porCaja)}
+                            </span>
+                          )}
+
+                          {nota && (
+                            <span
+                              className="mush-celda-nota text-secondary fst-italic"
+                              style={{ fontSize: "0.72rem" }}
+                            >
+                              {nota}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
+              {/* Como fueron cambiando los datos que se cargan */}
+              <div className="d-flex justify-content-end gap-2 mt-3">
+                <button
+                  type="button"
+                  className="btn-mush-ghost"
+                  onClick={() => setVerHistorial((previo) => !previo)}
+                >
+                  {verHistorial ? "Volver" : "Historial"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

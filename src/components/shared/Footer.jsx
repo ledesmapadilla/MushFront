@@ -6,7 +6,7 @@ const Footer = () => {
       <div className="container px-3 px-lg-4" style={{ pointerEvents: "auto" }}>
         <div className="mush-navbar py-2 px-3 px-lg-4 rounded-4 shadow-sm text-center">
           <span className="small text-secondary">
-            © {anio} &nbsp;&nbsp; MUSH - Alfajores de Autor.
+            © {anio} &nbsp;&nbsp; MUSH - Alfajores Artesanales.
           </span>
         </div>
       </div>

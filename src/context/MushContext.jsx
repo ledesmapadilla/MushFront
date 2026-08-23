@@ -14,6 +14,8 @@ import {
   calcularResumenMes,
   calcularSerieMensual,
 } from "../utils/calculos";
+import { costearProducto } from "../utils/costos";
+import { anotarPrecios, preciosDeProducto } from "../utils/precios";
 import { apiIngredientes, apiAlfajores, apiPackaging, apiRecetas, apiPersonal } from "../services/api.js";
 
 const MushContext = createContext();
@@ -273,6 +275,34 @@ export function MushProvider({ children }) {
     cargarBackend();
   }, []);
 
+  /**
+   * Anota en cada receta como quedaron sus precios cuando cambia lo que le da
+   * el costo: el precio de un ingrediente, el de un packaging o un sueldo.
+   *
+   * El precio de venta no se toca a mano en esos casos, pero se mueve igual, y
+   * si no se anota aca el cambio no queda registrado en ningun lado. Se compara
+   * el costo de antes con el de despues y solo se anotan las recetas que
+   * efectivamente cambiaron.
+   */
+  const anotarCambioDeCosto = (cambios) => {
+    const antes = { ingredientes, packaging, personal };
+    const despues = { ...antes, ...cambios };
+
+    (recetas || []).forEach((receta) => {
+      const costoAntes = costearProducto(receta, antes).total;
+      const costoDespues = costearProducto(receta, despues).total;
+      if (costoAntes === costoDespues) return;
+
+      const { publico, revendedor } = preciosDeProducto(costoDespues, receta.precios);
+      const precios = anotarPrecios(receta.precios, {
+        costo: costoDespues,
+        publico,
+        revendedor,
+      });
+      if (precios !== receta.precios) guardarReceta({ ...receta, precios });
+    });
+  };
+
   // Acciones: Stock / Ingredientes
   const guardarIngrediente = async (datos) => {
     let guardado = { ...datos };
@@ -306,14 +336,12 @@ export function MushProvider({ children }) {
     }
 
     // Siempre persistir en el estado y localStorage (Blindaje de datos)
-    setIngredientes((prev) => {
-      const existeLocal = prev.some((i) => i.id === guardado.id);
-      if (existeLocal) {
-        return prev.map((i) => (i.id === guardado.id ? { ...i, ...guardado } : i));
-      } else {
-        return [...prev, guardado];
-      }
-    });
+    const listaNueva = ingredientes.some((i) => i.id === guardado.id)
+      ? ingredientes.map((i) => (i.id === guardado.id ? { ...i, ...guardado } : i))
+      : [...ingredientes, guardado];
+
+    setIngredientes(listaNueva);
+    anotarCambioDeCosto({ ingredientes: listaNueva });
 
     return guardado;
   };
@@ -410,14 +438,12 @@ export function MushProvider({ children }) {
       }
     }
 
-    setPackaging((prev) => {
-      const existeLocal = prev.some((p) => p.id === guardado.id);
-      if (existeLocal) {
-        return prev.map((p) => (p.id === guardado.id ? { ...p, ...guardado } : p));
-      } else {
-        return [...prev, guardado];
-      }
-    });
+    const listaNueva = packaging.some((p) => p.id === guardado.id)
+      ? packaging.map((p) => (p.id === guardado.id ? { ...p, ...guardado } : p))
+      : [...packaging, guardado];
+
+    setPackaging(listaNueva);
+    anotarCambioDeCosto({ packaging: listaNueva });
 
     return guardado;
   };
@@ -462,6 +488,11 @@ export function MushProvider({ children }) {
     const existe = personal.some((p) => p.id === guardado.id);
 
     fusionarPersonal(guardado);
+    anotarCambioDeCosto({
+      personal: existe
+        ? personal.map((p) => (p.id === guardado.id ? { ...p, ...guardado } : p))
+        : [...personal, guardado],
+    });
 
     const sincronizar = existe
       ? apiPersonal.actualizar(guardado.id, guardado)
