@@ -13,7 +13,8 @@ export const PRODUCTOS_BASE = [
   { slug: "alfajor-de-pistacho", nombre: "Alfajor de Pistacho", categoria: "Alfajor", imagen: "🟢" },
   { slug: "mini-semi", nombre: "Mini Semiamargo", categoria: "Mini", imagen: "🍪" },
   { slug: "mini-blanco", nombre: "Mini Blanco", categoria: "Mini", imagen: "🤍" },
-  { slug: "mendiant", nombre: "Mendiant", categoria: "Mendiant", imagen: "🙇" },
+  // Arranca otra familia de productos: las listas lo marcan con una linea.
+  { slug: "mendiant", nombre: "Mendiant", categoria: "Mendiant", imagen: "🙇", corte: true },
   { slug: "tabletas-chocolate", nombre: "Tabletas Chocolate", categoria: "Tableta", imagen: "🟫" },
 ];
 

@@ -206,27 +206,3 @@ export const costearProducto = (receta, { ingredientes, packaging, personal } = 
     detalleManoObra,
   };
 };
-
-/**
- * Promedio de varios costeos, para los productos que agrupan variedades (las
- * tabletas): el producto no tiene receta propia, la tienen sus variedades.
- * Solo promedia las que ya tienen algo cargado.
- */
-export const promedioDeCostos = (costos) => {
-  const conDatos = (costos || []).filter((costo) => costo.total > 0);
-  if (conDatos.length === 0) return { ...COSTO_VACIO, promedioDe: 0 };
-
-  const promedio = (campo) =>
-    conDatos.reduce((total, costo) => total + costo[campo], 0) / conDatos.length;
-
-  return {
-    ...COSTO_VACIO,
-    ingredientes: promedio("ingredientes"),
-    packaging: promedio("packaging"),
-    manoObra: promedio("manoObra"),
-    total: promedio("total"),
-    incompletos: conDatos.reduce((total, costo) => total + costo.incompletos, 0),
-    unidad: conDatos[0].unidad,
-    promedioDe: conDatos.length,
-  };
-};

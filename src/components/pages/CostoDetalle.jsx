@@ -1,7 +1,7 @@
 import { Fragment, useMemo } from "react";
 import { useParams, Link, Navigate } from "react-router-dom";
 import { useMush } from "../../context/MushContext";
-import { productosDeCatalogo, variedadesDe } from "../../data/productos";
+import { productoDeVariedad, productosDeCatalogo, variedadesDe } from "../../data/productos";
 import { preparacionesDeReceta } from "../../data/preparaciones";
 import { buscarParte, buscarReceta, costearProducto, SECCIONES_COSTO } from "../../utils/costos";
 import { formatearCantidad } from "../../utils/conversiones";
@@ -81,6 +81,9 @@ const CostoDetalle = () => {
   // Las tabletas agrupan variedades y no tienen receta propia: su detalle se
   // arma aparte.
   const agrupaVariedades = variedadesDe(slug).length > 0;
+  // Una variedad vuelve a la lista de las suyas, no al listado general.
+  const productoPadre = productoDeVariedad(slug);
+  const volverA = productoPadre ? `/costos/${productoPadre}` : "/costos";
 
   // La mano de obra es una parte mas, y los titulos de seccion solo hacen
   // falta cuando la parte junta mas de una (los ingredientes: masa y unitario).
@@ -105,7 +108,7 @@ const CostoDetalle = () => {
         <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
           <div className="d-flex align-items-center gap-3">
             <Link
-              to="/costos"
+              to={volverA}
               className="btn btn-sm btn-outline-secondary py-1 px-2 text-white d-inline-flex align-items-center gap-1 rounded-3"
               title="Volver a Costos"
             >

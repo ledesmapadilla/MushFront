@@ -1,13 +1,9 @@
 import { useMemo } from "react";
+import { Link } from "react-router-dom";
 import { useMush } from "../../context/MushContext";
 import { productosDeCatalogo, variedadesDe } from "../../data/productos";
-import {
-  buscarReceta,
-  costearProducto,
-  PARTE_TOTAL,
-  promedioDeCostos,
-} from "../../utils/costos";
-import BloquesCosto from "../shared/BloquesCosto.jsx";
+import { buscarReceta, costearProducto, PARTE_TOTAL } from "../../utils/costos";
+import TarjetaCosto from "../shared/TarjetaCosto.jsx";
 
 /**
  * Costos por producto: los mismos 9 productos del catalogo, uno debajo del
@@ -18,14 +14,14 @@ import BloquesCosto from "../shared/BloquesCosto.jsx";
  * muestra el dato, asi que ocupa el ancho completo y se lee de corrido. Cada
  * parte se toca y abre su detalle (/costos/:slug/:parte) con la tabla de donde
  * sale ese numero.
+ *
+ * Los productos que agrupan variedades (las tabletas) no tienen un costo
+ * propio que mostrar: el costo lo tiene cada variedad. Por eso su tarjeta es
+ * solo el nombre y lleva al listado de las suyas (/costos/:slug).
  */
 
 // El ancho lo comparten el titulo y la lista, para que no se desfasen.
 const ANCHO_BLOQUE = "920px";
-
-// Los dos lados de la tarjeta miden lo mismo, asi todas quedan igual de altas
-// sin importar si el producto lleva badge.
-const ALTO_CONTENIDO = "72px";
 
 const Costos = () => {
   const { alfajores, recetas, ingredientes, packaging, personal } = useMush();
@@ -33,27 +29,11 @@ const Costos = () => {
   const listaCostos = useMemo(() => {
     const datos = { ingredientes, packaging, personal };
 
-    return productosDeCatalogo(alfajores).map((producto) => {
-      const receta = buscarReceta(recetas, producto.slug);
-      const costo = costearProducto(receta, datos);
-
-      // Las tabletas no tienen receta propia: el costo sale del promedio de
-      // sus variedades, y por eso todavia no tienen detalle propio.
-      const variedades = variedadesDe(producto.slug);
-      if (costo.total === 0 && variedades.length > 0) {
-        return {
-          ...producto,
-          agrupa: true,
-          costo: promedioDeCostos(
-            variedades.map((variedad) =>
-              costearProducto(buscarReceta(recetas, variedad.slug), datos)
-            )
-          ),
-        };
-      }
-
-      return { ...producto, agrupa: false, costo };
-    });
+    return productosDeCatalogo(alfajores).map((producto) => ({
+      ...producto,
+      variedades: variedadesDe(producto.slug).length,
+      costo: costearProducto(buscarReceta(recetas, producto.slug), datos),
+    }));
   }, [alfajores, recetas, ingredientes, packaging, personal]);
 
   return (
@@ -69,52 +49,37 @@ const Costos = () => {
         </p>
 
         {/* Una tarjeta por producto, una debajo de la otra */}
-        {listaCostos.map(({ slug, nombre, categoria, imagen, costo, agrupa }) => (
-          <div className="mush-card p-3 p-sm-4 mb-3" key={slug}>
-            <div className="d-flex flex-column flex-lg-row align-items-lg-center gap-3">
-              {/* Que producto es */}
-              <div
-                className="d-flex align-items-center gap-3 text-start"
-                style={{ minWidth: "215px", minHeight: ALTO_CONTENIDO }}
+        {listaCostos.map((producto) =>
+          producto.variedades > 0 ? (
+            // El que agrupa: tarjeta chica, centrada y sin numeros
+            <div className="text-center mb-3" key={producto.slug}>
+              <Link
+                to={`/costos/${producto.slug}`}
+                className="mush-card mush-card-hover text-decoration-none d-inline-flex align-items-center gap-3 px-4 py-3"
+                title={`Ver el costo de cada ${producto.nombre.toLowerCase()}`}
               >
-                <span className="fs-2">{imagen}</span>
-                <div>
+                <span className="fs-2">{producto.imagen}</span>
+                <span className="text-start">
                   <strong className="text-white fw-bold d-block" style={{ fontSize: "1rem" }}>
-                    {nombre}
+                    {producto.nombre}
                   </strong>
                   <span className="text-secondary" style={{ fontSize: "0.72rem" }}>
-                    {categoria} · por {costo.unidad}
+                    {producto.variedades} variedades
                   </span>
-                  {costo.promedioDe > 0 && (
-                    <span className="mush-badge mush-badge-info d-inline-flex mt-1">
-                      Promedio de {costo.promedioDe}
-                    </span>
-                  )}
-                  {costo.incompletos > 0 && (
-                    <span
-                      className="mush-badge mush-badge-alerta d-inline-flex mt-1"
-                      title="Hay insumos sin precio o sin la equivalencia de unidades cargada"
-                    >
-                      <i className="bi bi-exclamation-triangle-fill"></i>
-                      {costo.incompletos} sin precio
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Cada parte lleva a su detalle; el total no, porque no es una
-                  parte: es la suma de las otras tres. Las tabletas agrupan
-                  variedades y su detalle se arma aparte, asi que no llevan a
-                  ningun lado. */}
-              <BloquesCosto
-                costo={costo}
-                enlaceDe={
-                  agrupa ? null : (id) => (id === PARTE_TOTAL.id ? null : `/costos/${slug}/${id}`)
-                }
-              />
+                </span>
+                <i className="bi bi-chevron-right text-dulce"></i>
+              </Link>
             </div>
-          </div>
-        ))}
+          ) : (
+            <TarjetaCosto
+              key={producto.slug}
+              {...producto}
+              enlaceDe={(parte, slug) =>
+                parte === PARTE_TOTAL.id ? null : `/costos/${slug}/${parte}`
+              }
+            />
+          )
+        )}
       </div>
     </div>
   );

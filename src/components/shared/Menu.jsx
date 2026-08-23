@@ -40,6 +40,7 @@ const Menu = () => {
   const navItems = [
     { ruta: "/recetas", etiqueta: "Recetas", icono: "bi-book" },
     { ruta: "/costos", etiqueta: "Costos", icono: "bi-cash-stack" },
+    { ruta: "/precios-venta", etiqueta: "Precios Venta", icono: "bi-tag" },
     {
       ruta: "/stock",
       etiqueta: "Insumos & Stock",

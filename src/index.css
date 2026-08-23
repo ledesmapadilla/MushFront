@@ -515,7 +515,7 @@ header.sticky-top {
 
 .mush-tabla-compacta tbody td,
 [data-bs-theme="light"] .mush-tabla-compacta tbody td {
-  padding: 0.1rem 0.55rem;
+  padding: 0.05rem 0.55rem;
 }
 
 /* Formularios estilizados */
@@ -732,6 +732,145 @@ header.sticky-top {
 
 .border-dulce {
   border-color: var(--mush-dulce) !important;
+}
+
+/* Un color de letra por canal de venta: el precio y su margen se leen juntos
+   aunque esten en tablas distintas. Sin fondo, solo el color del texto. */
+.mush-tabla .mush-col-publico,
+.mush-tabla .mush-col-publico .mush-input {
+  color: var(--mush-ok) !important;
+}
+
+.mush-tabla .mush-col-revendedor,
+.mush-tabla .mush-col-revendedor .mush-input {
+  color: var(--mush-texto) !important;
+}
+
+/* Raya que separa dos cuentas escritas una al lado de la otra. */
+.mush-division-vertical {
+  align-self: stretch;
+  width: 1.5px;
+  background-color: var(--mush-borde);
+}
+
+/* Un campo dentro de una tabla. El estilo general de .mush-input es para un
+   formulario (0.9rem y 0.6rem de padding, con !important) y no entra en una
+   fila: hay que achicarlo aca o la fila crece con el campo. */
+.mush-tabla tbody td .mush-input {
+  height: 26px !important;
+  line-height: normal !important;
+  padding: 0 0.3rem !important;
+  font-size: 0.75rem !important;
+  border-radius: 0.35rem !important;
+  /* Fondo tenue: es lo que hay que completar, el resto de la tabla sale de
+     estos valores. */
+  background-color: var(--mush-dulce-suave) !important;
+  border-color: var(--mush-dulce-borde) !important;
+}
+
+/* Tablas dibujadas una al lado de la otra que tienen que mantener las filas
+   enfrentadas. Nada de lo que entre en una celda puede cambiarle el alto: el
+   contenido va en una linea sola (un importe como "$ 39.442,49" partido en dos
+   renglones estiraba esa fila y desfasaba todo lo de abajo) y lo que no entra
+   se recorta. */
+.mush-tabla-pareja tbody td {
+  white-space: nowrap;
+  overflow: hidden;
+  line-height: 1.2;
+  /* El alto lo fija la fila, no el contenido: el padding vertical lo pondria
+     en juego de nuevo. */
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+/* Nada de lo que entre en una celda puede pasar del alto de la fila. */
+.mush-tabla-pareja tbody td > * {
+  max-height: 28px;
+  overflow: hidden;
+}
+
+/* Corte vertical dentro de una tabla: linea doble, para distinguirlo de la
+   grilla comun. Separa el producto y su costo de los precios de venta. */
+.mush-tabla .mush-col-doble {
+  border-left: 4px double var(--mush-borde) !important;
+}
+
+/* Corte entre dos familias de productos dentro de una lista: linea doble, para
+   distinguirlo de la grilla comun de la tabla. */
+.mush-tabla .mush-fila-corte td {
+  border-top: 4px double var(--mush-borde) !important;
+}
+
+/* Corte entre dos grupos de columnas de una tabla (los precios de un lado, los
+   margenes del otro). */
+/* Titulo de columna con alto fijo. Dos tablas dibujadas una al lado de la otra
+   solo mantienen las filas alineadas si sus encabezados miden lo mismo, y eso
+   no puede depender de en cuantos renglones parta cada texto. */
+.mush-th-caja {
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  text-align: center;
+}
+
+/* Encabezados que no entran en una linea: la columna manda el ancho y el
+   titulo se acomoda en dos renglones. */
+.mush-tabla thead th {
+  white-space: normal;
+  line-height: 1.15;
+  vertical-align: middle;
+}
+
+/* Fila que abre un grupo dentro de una tabla (las variedades de un producto).
+   Va sobre fondo de acento para que se vea que lo que sigue cuelga de ahi. */
+/* El caramelo quedo para los campos que se completan, asi que el titulo de un
+   grupo va en una superficie neutra y se destaca por los bordes. */
+.mush-tabla .mush-fila-grupo td {
+  background-color: var(--mush-superficie-elevada);
+  border-top: 2px solid var(--mush-borde) !important;
+  border-bottom: 2px solid var(--mush-borde) !important;
+}
+
+.mush-tabla .mush-fila-grupo .mush-kicker {
+  font-size: 0.8rem;
+  letter-spacing: 0.14em;
+  color: var(--mush-texto);
+}
+
+.mush-tabla .mush-col-separada {
+  border-left: 2px solid rgba(255, 255, 255, 0.3) !important;
+}
+
+[data-bs-theme="light"] .mush-tabla .mush-col-separada {
+  border-left: 2px solid rgba(0, 0, 0, 0.28) !important;
+}
+
+/* Acento verde. Precios de Venta usa el mismo juego de cajas que Costos pero en
+   el otro color, para que un precio no se lea como un costo. */
+.bg-ok-suave {
+  background-color: var(--mush-ok-bg) !important;
+}
+
+.border-ok {
+  border-color: var(--mush-ok) !important;
+}
+
+/* La caja del resultado: el numero que se busca de un vistazo. Va en su propio
+   color, distinto del acento de la pantalla, sobre un tinte suave. */
+.mush-caja-resultado {
+  background-color: rgba(2, 132, 199, 0.14) !important;
+  border-color: var(--mush-info) !important;
+}
+
+.mush-caja-resultado .mush-kicker,
+.mush-caja-resultado .mush-dato {
+  color: var(--mush-info) !important;
+}
+
+[data-bs-theme="dark"] .mush-caja-resultado {
+  background-color: rgba(56, 189, 248, 0.14) !important;
 }
 
 /* SweetAlert2 Fondo Claro & Formato Compacto */

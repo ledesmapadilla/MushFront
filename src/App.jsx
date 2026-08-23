@@ -16,6 +16,8 @@ import AltaPersonal from "./components/pages/AltaPersonal.jsx";
 import Precios from "./components/pages/Precios.jsx";
 import Costos from "./components/pages/Costos.jsx";
 import CostoDetalle from "./components/pages/CostoDetalle.jsx";
+import CostosVariedades from "./components/pages/CostosVariedades.jsx";
+import PreciosVenta from "./components/pages/PreciosVenta.jsx";
 import Error404 from "./components/pages/Error404.jsx";
 
 function App() {
@@ -46,8 +48,9 @@ function App() {
             <Route path="/produccion" element={<Produccion />} />
             <Route path="/finanzas" element={<CostosFinanzas />} />
             <Route path="/costos" element={<Costos />} />
-            <Route path="/costos/:slug" element={<Navigate to="/costos" replace />} />
+            <Route path="/costos/:slug" element={<CostosVariedades />} />
             <Route path="/costos/:slug/:parte" element={<CostoDetalle />} />
+            <Route path="/precios-venta" element={<PreciosVenta />} />
             <Route path="/ventas" element={<Ventas />} />
             <Route path="*" element={<Error404 />} />
           </Routes>
