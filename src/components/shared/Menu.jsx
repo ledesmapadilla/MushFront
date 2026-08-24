@@ -57,6 +57,7 @@ const Menu = () => {
     },
     { ruta: "/finanzas", etiqueta: "Costos & Rentabilidad", icono: "bi-graph-up-arrow" },
     { ruta: "/ventas", etiqueta: "Ventas", icono: "bi-cart-check" },
+    { ruta: "/ventas-nuevo", etiqueta: "Ventas Nuevo", icono: "bi-cart-plus" },
   ];
 
   return (

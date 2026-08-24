@@ -782,6 +782,29 @@ header.sticky-top {
    contenido va en una linea sola (un importe como "$ 39.442,49" partido en dos
    renglones estiraba esa fila y desfasaba todo lo de abajo) y lo que no entra
    se recorta. */
+/* El encabezado tiene que quedar a la vista mientras se scrollea. `.mush-tabla`
+   lleva overflow: hidden para redondear sus esquinas, y eso anula el sticky de
+   los th: el navegador toma la tabla como el area de scroll y el encabezado no
+   se despega. Estas tablas resignan el recorte de la esquina a cambio de que el
+   titulo se vea siempre. */
+.mush-tabla-pareja {
+  overflow: visible;
+}
+
+.mush-tabla-pareja thead th {
+  z-index: 6;
+}
+
+/* Sin el overflow: hidden de la tabla, el fondo del encabezado ya no lo recorta
+   la esquina redondeada y se desborda sobre el borde. Se redondea el th. */
+.mush-tabla-pareja thead th:first-child {
+  border-top-left-radius: 0.65rem;
+}
+
+.mush-tabla-pareja thead th:last-child {
+  border-top-right-radius: 0.65rem;
+}
+
 .mush-tabla-pareja tbody td {
   white-space: nowrap;
   overflow: hidden;
@@ -792,9 +815,10 @@ header.sticky-top {
   padding-bottom: 0 !important;
 }
 
-/* Nada de lo que entre en una celda puede pasar del alto de la fila. */
+/* Nada de lo que entre en una celda puede pasar del alto de la fila. Da para
+   dos renglones cortos: el nombre de un producto y su aclaracion. */
 .mush-tabla-pareja tbody td > * {
-  max-height: 28px;
+  max-height: 30px;
   overflow: hidden;
 }
 
@@ -802,6 +826,23 @@ header.sticky-top {
    grilla comun. Separa el producto y su costo de los precios de venta. */
 .mush-tabla .mush-col-doble {
   border-left: 4px double var(--mush-borde) !important;
+}
+
+/* Una caja que no es un costo (lleva a otra pantalla): se lee como un bloque
+   aparte de las que si lo son. */
+.mush-caja-aparte {
+  border-left: 1.5px solid var(--mush-borde);
+  padding-left: 0.85rem !important;
+}
+
+@media (max-width: 767.98px) {
+  .mush-caja-aparte {
+    border-left: none;
+    border-top: 1.5px solid var(--mush-borde);
+    padding-left: 0.25rem !important;
+    padding-top: 0.75rem;
+    margin-top: 0.25rem;
+  }
 }
 
 /* Corte entre dos familias de productos dentro de una lista: linea doble, para
@@ -929,7 +970,17 @@ header.sticky-top {
   position: sticky;
   top: 0;
   z-index: 5;
-  background-color: var(--mush-superficie);
+  /* Opaco: por debajo pasan las filas al scrollear. El tinte propio del th se
+     pinta encima de este fondo. */
+  background-color: var(--mush-superficie) !important;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.08));
+}
+
+/* En claro hay una regla mas especifica ([data-bs-theme]) que pinta el th con
+   un fondo translucido: al quedar fijo se veian pasar las filas por debajo. */
+[data-bs-theme="light"] .mush-tabla thead th {
+  background-color: var(--mush-superficie) !important;
+  background-image: linear-gradient(rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0.06));
 }
 
 /* Scrollbar sutil para contenedores de tablas */

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import BotonExcel from "../shared/BotonExcel.jsx";
 import { useMush } from "../../context/MushContext";
 import BuscadorFiltro from "../shared/BuscadorFiltro.jsx";
 import {
@@ -220,6 +221,27 @@ const AltaPersonal = () => {
                   />
                 </div>
               )}
+              <BotonExcel
+                titulo="Personal"
+                columnas={[
+                  "Nombre",
+                  "Fecha",
+                  { titulo: "Mensual", formato: "moneda" },
+                  { titulo: "Semanal", formato: "moneda" },
+                  { titulo: "Hora", formato: "moneda" },
+                  "Observaciones",
+                ]}
+                filas={() =>
+                  personalFiltrado.map((persona) => [
+                    persona.nombre,
+                    fechaLegible(mensualVigente(persona.mensual)?.fecha),
+                    valorMensual(persona),
+                    valorSemanal(persona),
+                    valorHora(persona),
+                    persona.observaciones,
+                  ])
+                }
+              />
               <button type="button" className="btn-mush text-nowrap" onClick={handleAbrirNuevo}>
                 Nuevo Personal
               </button>

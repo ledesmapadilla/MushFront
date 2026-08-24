@@ -43,7 +43,13 @@ const CostoDetalle = () => {
     [alfajores, slug]
   );
 
-  const receta = useMemo(() => buscarReceta(recetas, slug), [recetas, slug]);
+  // El que agrupa variedades no tiene receta propia: se cuentan las de la
+  // primera, que en packaging y mano de obra son iguales en todas. El nombre y
+  // el titulo siguen siendo los del producto que agrupa.
+  const receta = useMemo(() => {
+    const variedades = variedadesDe(slug);
+    return buscarReceta(recetas, variedades[0]?.slug || slug);
+  }, [recetas, slug]);
 
   const costo = useMemo(
     () => costearProducto(receta, { ingredientes, packaging, personal }),
@@ -80,8 +86,7 @@ const CostoDetalle = () => {
   const manoObra = costo.detalleManoObra;
   // Las tabletas agrupan variedades y no tienen receta propia: su detalle se
   // arma aparte.
-  const agrupaVariedades = variedadesDe(slug).length > 0;
-  // Una variedad vuelve a la lista de las suyas, no al listado general.
+    // Una variedad vuelve a la lista de las suyas, no al listado general.
   const productoPadre = productoDeVariedad(slug);
   const volverA = productoPadre ? `/costos/${productoPadre}` : "/costos";
 
@@ -91,9 +96,7 @@ const CostoDetalle = () => {
   const mostrarTitulosDeSeccion = parteActiva.secciones.length > 1;
   const hayManoDeObra = manoObra.producidos > 0 || manoObra.pago > 0;
 
-  const sinDatos =
-    agrupaVariedades ||
-    (secciones.length === 0 && !(mostrarManoObra && hayManoDeObra));
+  const sinDatos = secciones.length === 0 && !(mostrarManoObra && hayManoDeObra);
 
   // El pie de la tabla es el subtotal de la parte: el mismo numero de la caja.
   const pie = { titulo: `${parteActiva.titulo} por ${costo.unidad}`, monto: costo[parteActiva.campo] };
@@ -163,9 +166,7 @@ const CostoDetalle = () => {
                 {sinDatos ? (
                   <tr>
                     <td colSpan="5" className="text-center py-4 text-secondary">
-                      {agrupaVariedades
-                        ? "Este producto agrupa variedades: cada una tiene su propio costo."
-                        : `Sin ${parteActiva.titulo.toLowerCase()} en esta receta.`}
+                      {`Sin ${parteActiva.titulo.toLowerCase()} en esta receta.`}
                     </td>
                   </tr>
                 ) : (

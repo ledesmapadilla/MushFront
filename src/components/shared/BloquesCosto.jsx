@@ -19,16 +19,37 @@ import { moneda } from "../../utils/sueldos";
  * una tarjeta con un total largo (el mendiant) queda mas alta que las demas.
  */
 const ALTO_BLOQUE = "72px";
+const ANCHO_CAJA_SOLA = "168px";
 
-const BLOQUES = [...PARTES_COSTO, PARTE_TOTAL];
-
-const BloquesCosto = ({ costo, parteActiva = null, soloActiva = false, enlaceDe = null }) => {
+const BloquesCosto = ({
+  costo,
+  partes = PARTES_COSTO,
+  conTotal = true,
+  parteActiva = null,
+  soloActiva = false,
+  enlaceDe = null,
+}) => {
   // Sin parte elegida el destacado es el total, que es lo que se esta mirando.
   const activa = parteActiva || PARTE_TOTAL.id;
-  const visibles = soloActiva ? BLOQUES.filter(({ id }) => id === activa) : BLOQUES;
+  const bloques = conTotal ? [...partes, PARTE_TOTAL] : partes;
+  const visibles = soloActiva ? bloques.filter(({ id }) => id === activa) : bloques;
+  // Una caja sola no se reparte en cuartos: mide lo suyo y se apoya a la derecha.
+  // Pocas cajas no se reparten en cuartos: miden lo suyo y se apoyan a la
+  // derecha, para no dejar la mitad de la tarjeta vacia.
+  const sola = !soloActiva && visibles.length <= 2;
 
   return (
-    <div className={`row g-2 w-100 m-0 ${soloActiva ? "justify-content-center" : ""}`}>
+    <div
+      className={`row g-2 w-100 m-0 ${
+        soloActiva
+          ? "justify-content-center"
+          : // Con una sola caja no se deja el hueco a la derecha: se apoya donde
+            // esta el total en las demas tarjetas.
+            sola
+            ? "justify-content-end"
+            : ""
+      }`}
+    >
       {visibles.map(({ id, titulo, campo }) => {
         const destino = enlaceDe ? enlaceDe(id) : null;
         const esTotal = id === PARTE_TOTAL.id;
@@ -60,24 +81,29 @@ const BloquesCosto = ({ costo, parteActiva = null, soloActiva = false, enlaceDe 
         );
 
         return (
-          <div className={soloActiva ? "col-6 col-md-3" : "col-6 col-md-3"} key={id}>
+          <div
+            className={sola ? "col-auto" : "col-6 col-md-3"}
+            style={sola ? { width: ANCHO_CAJA_SOLA } : undefined}
+            key={id}
+          >
             {destino ? (
               <Link
                 to={destino}
                 className={clases}
-                style={{ minHeight: ALTO_BLOQUE }}
+                style={{ height: ALTO_BLOQUE }}
                 title={`Ver de donde sale ${titulo.toLowerCase()}`}
               >
                 {contenido}
               </Link>
             ) : (
-              <div className={clases} style={{ minHeight: ALTO_BLOQUE }}>
+              <div className={clases} style={{ height: ALTO_BLOQUE }}>
                 {contenido}
               </div>
             )}
           </div>
         );
       })}
+
     </div>
   );
 };

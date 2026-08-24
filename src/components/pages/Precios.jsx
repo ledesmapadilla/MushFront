@@ -1,6 +1,8 @@
 import { useState } from "react";
+import BotonExcel from "../shared/BotonExcel.jsx";
 import { useMush } from "../../context/MushContext";
 import BuscadorFiltro from "../shared/BuscadorFiltro.jsx";
+import { fechaLegible } from "../../utils/sueldos";
 import Swal from "sweetalert2";
 
 const UNIDADES_INGREDIENTES = ["kg", "gr", "lts", "ml", "un", "otras"];
@@ -321,15 +323,36 @@ const TarjetaPrecios = ({
               {conPrecio} de {(items || []).length} con precio
             </span>
           </h5>
-          {(items || []).length > 0 && (
-            <div style={{ maxWidth: "240px", width: "100%" }}>
-              <BuscadorFiltro
-                valor={busqueda}
-                alCambiar={setBusqueda}
-                placeholder={placeholderBusqueda}
-              />
-            </div>
-          )}
+          <div className="d-flex align-items-center gap-2">
+            {(items || []).length > 0 && (
+              <div style={{ maxWidth: "240px", width: "100%" }}>
+                <BuscadorFiltro
+                  valor={busqueda}
+                  alCambiar={setBusqueda}
+                  placeholder={placeholderBusqueda}
+                />
+              </div>
+            )}
+            <BotonExcel
+              titulo={`Precios de ${etiquetaColumna}`}
+              columnas={[
+                etiquetaColumna,
+                "Fecha",
+                { titulo: "Precio", formato: "moneda" },
+                "Unidad",
+                "Observaciones",
+              ]}
+              filas={() =>
+                itemsFiltrados.map((item) => [
+                  item.nombre,
+                  fechaLegible(item.fechaPrecio),
+                  Number(item.precio) || 0,
+                  item.unidad,
+                  item.observacionesPrecio,
+                ])
+              }
+            />
+          </div>
         </div>
 
         {/* Las dos tablas comparten la pantalla: cada una lleva su scroll interno */}

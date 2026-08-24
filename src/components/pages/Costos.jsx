@@ -1,9 +1,10 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useMush } from "../../context/MushContext";
+import { buscarReceta, costearProducto, PARTES_COSTO, PARTE_TOTAL } from "../../utils/costos";
 import { productosDeCatalogo, variedadesDe } from "../../data/productos";
-import { buscarReceta, costearProducto, PARTE_TOTAL } from "../../utils/costos";
 import TarjetaCosto from "../shared/TarjetaCosto.jsx";
+import BotonExcel from "../shared/BotonExcel.jsx";
 
 /**
  * Costos por producto: los mismos 9 productos del catalogo, uno debajo del
@@ -15,9 +16,9 @@ import TarjetaCosto from "../shared/TarjetaCosto.jsx";
  * parte se toca y abre su detalle (/costos/:slug/:parte) con la tabla de donde
  * sale ese numero.
  *
- * Los productos que agrupan variedades (las tabletas) no tienen un costo
- * propio que mostrar: el costo lo tiene cada variedad. Por eso su tarjeta es
- * solo el nombre y lleva al listado de las suyas (/costos/:slug).
+ * Las tabletas no tienen un costo propio: el costo lo tiene cada variedad. Su
+ * tarjeta tiene la misma forma que las demas y sus cajas quedan vacias hasta
+ * que se defina de donde sale ese numero.
  */
 
 // El ancho lo comparten el titulo y la lista, para que no se desfasen.
@@ -29,12 +30,31 @@ const Costos = () => {
   const listaCostos = useMemo(() => {
     const datos = { ingredientes, packaging, personal };
 
-    return productosDeCatalogo(alfajores).map((producto) => ({
-      ...producto,
-      variedades: variedadesDe(producto.slug).length,
-      costo: costearProducto(buscarReceta(recetas, producto.slug), datos),
-    }));
+    return productosDeCatalogo(alfajores).map((producto) => {
+      const variedades = variedadesDe(producto.slug);
+      // El que agrupa no tiene receta propia. El packaging y la mano de obra son
+      // los mismos en todas sus variedades, asi que se muestran los de la
+      // primera y desde ahi se sigue al detalle.
+      const referencia = variedades[0]?.slug || producto.slug;
+
+      return {
+        ...producto,
+        variedades: variedades.length,
+        costo: costearProducto(buscarReceta(recetas, referencia), datos),
+      };
+    });
   }, [alfajores, recetas, ingredientes, packaging, personal]);
+
+  const filasDePlanilla = () =>
+    listaCostos.map(({ nombre, categoria, costo }) => [
+      nombre,
+      categoria,
+      costo.unidad,
+      costo.ingredientes,
+      costo.packaging,
+      costo.manoObra,
+      costo.total,
+    ]);
 
   return (
     <div className="container py-4">
@@ -43,43 +63,69 @@ const Costos = () => {
         style={{ maxWidth: ANCHO_BLOQUE, width: "100%", paddingBottom: "75px" }}
       >
         {/* Header */}
-        <h2 className="mush-display text-white text-center mb-1">Costos</h2>
+        <div className="d-flex align-items-center mb-1">
+          <span className="flex-grow-1" style={{ flexBasis: 0 }}></span>
+          <h2 className="mush-display text-white mb-0">Costos</h2>
+          <span className="flex-grow-1 d-flex justify-content-center" style={{ flexBasis: 0 }}>
+            <BotonExcel
+              titulo="Costos"
+              columnas={[
+                "Producto",
+                "Categoria",
+                "Unidad",
+                { titulo: "Ingredientes", formato: "moneda" },
+                { titulo: "Packaging", formato: "moneda" },
+                { titulo: "Mano de obra", formato: "moneda" },
+                { titulo: "Total", formato: "moneda" },
+              ]}
+              filas={filasDePlanilla}
+            />
+          </span>
+        </div>
         <p className="text-center text-secondary mb-4" style={{ fontSize: "0.8rem" }}>
           Costo por unidad de cada producto
         </p>
 
-        {/* Una tarjeta por producto, una debajo de la otra */}
-        {listaCostos.map((producto) =>
-          producto.variedades > 0 ? (
-            // El que agrupa: tarjeta chica, centrada y sin numeros
-            <div className="text-center mb-3" key={producto.slug}>
-              <Link
-                to={`/costos/${producto.slug}`}
-                className="mush-card mush-card-hover text-decoration-none d-inline-flex align-items-center gap-3 px-4 py-3"
-                title={`Ver el costo de cada ${producto.nombre.toLowerCase()}`}
-              >
-                <span className="fs-2">{producto.imagen}</span>
-                <span className="text-start">
-                  <strong className="text-white fw-bold d-block" style={{ fontSize: "1rem" }}>
-                    {producto.nombre}
-                  </strong>
-                  <span className="text-secondary" style={{ fontSize: "0.72rem" }}>
-                    {producto.variedades} variedades
+        {/* Una tarjeta por producto, una debajo de la otra. La de las tabletas
+            tiene la misma forma que las demas: como no tiene costo propio, sus
+            cajas se ven vacias hasta que se defina de donde salen. */}
+        {listaCostos.map((producto) => (
+          <TarjetaCosto
+            key={producto.slug}
+            {...producto}
+            // El que agrupa variedades no tiene ingredientes propios: los tiene
+            // cada tableta, y a eso lleva la caja del final.
+            subtitulo={producto.variedades > 0 ? `${producto.variedades} variedades` : undefined}
+            partes={
+              producto.variedades > 0
+                ? PARTES_COSTO.filter((parte) => parte.id !== "ingredientes")
+                : undefined
+            }
+            conTotal={producto.variedades === 0}
+            // El acceso a las variedades no es un costo: va afuera de la tarjeta
+            alLado={
+              producto.variedades > 0 ? (
+                <Link
+                  to={`/costos/${producto.slug}`}
+                  className="mush-card mush-card-hover bg-ok-suave border-ok text-decoration-none d-flex flex-column justify-content-center text-center px-3"
+                  style={{ width: "190px" }}
+                  title={`Ver los ingredientes de cada ${producto.nombre.toLowerCase()}`}
+                >
+                  <span
+                    className="mush-kicker text-ok d-block mb-1"
+                    style={{ fontSize: "0.62rem", letterSpacing: "0.06em" }}
+                  >
+                    Ir a ingredientes por tableta
                   </span>
-                </span>
-                <i className="bi bi-chevron-right text-dulce"></i>
-              </Link>
-            </div>
-          ) : (
-            <TarjetaCosto
-              key={producto.slug}
-              {...producto}
-              enlaceDe={(parte, slug) =>
-                parte === PARTE_TOTAL.id ? null : `/costos/${slug}/${parte}`
-              }
-            />
-          )
-        )}
+                  <i className="bi bi-arrow-right text-ok"></i>
+                </Link>
+              ) : undefined
+            }
+            enlaceDe={(parte, slug) =>
+              parte === PARTE_TOTAL.id ? null : `/costos/${slug}/${parte}`
+            }
+          />
+        ))}
       </div>
     </div>
   );

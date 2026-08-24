@@ -54,16 +54,48 @@ export const margenReal = (precio, costo) =>
  * todas las columnas, y se puede comparar un dia contra otro.
  */
 export const COLUMNAS_HISTORIAL = [
-  { id: "margenPublico", titulo: "Gcia. deseada", formato: "porcentaje" },
-  { id: "dtoRevendedor", titulo: "Dto. revend.", formato: "porcentaje" },
-  { id: "unidadesPorCaja", titulo: "U. x caja", formato: "numero" },
-  { id: "costo", titulo: "Costo", formato: "moneda" },
-  { id: "publico", titulo: "Precio publico", formato: "moneda" },
-  { id: "revendedor", titulo: "Precio revend.", formato: "moneda" },
+  { id: "margenPublico", titulo: "Gcia. deseada", formato: "porcentaje", ancho: "88px" },
+  { id: "dtoRevendedor", titulo: "Dto. revend.", formato: "porcentaje", ancho: "70px" },
+  {
+    id: "gciaRealRevendedor",
+    titulo: "Gcia. real (revend.)",
+    formato: "porcentaje",
+    ancho: "92px",
+    valor: (dia) => margenReal(dia.revendedor, dia.costo),
+  },
+  // Los importes mas largos del catalogo viven aca: la columna tiene que dar
+  // para que entren en un renglon.
+  { id: "costo", titulo: "Costos", formato: "moneda", ancho: "124px" },
+  { id: "publico", titulo: "Precio publico", formato: "moneda", ancho: "110px" },
+  {
+    id: "gananciaPublico",
+    titulo: "Gcia. publico",
+    formato: "moneda",
+    ancho: "110px",
+    valor: (dia) => (dia.publico === null ? null : dia.publico - dia.costo),
+  },
+  { id: "revendedor", titulo: "Precio revend.", formato: "moneda", ancho: "110px" },
+  {
+    id: "gananciaRevendedor",
+    titulo: "Gcia. revend.",
+    formato: "moneda",
+    ancho: "110px",
+    valor: (dia) => (dia.revendedor === null ? null : dia.revendedor - dia.costo),
+  },
 ];
 
-const mismaFoto = (a, b) =>
-  Boolean(a) && COLUMNAS_HISTORIAL.every(({ id }) => a[id] === b[id]);
+// Lo que se compara para saber si un dia cambio respecto del anterior: solo lo
+// que se guarda, no lo que se deriva de eso.
+const CAMPOS_GUARDADOS = [
+  "margenPublico",
+  "dtoRevendedor",
+  "unidadesPorCaja",
+  "costo",
+  "publico",
+  "revendedor",
+];
+
+const mismaFoto = (a, b) => Boolean(a) && CAMPOS_GUARDADOS.every((id) => a[id] === b[id]);
 
 /**
  * Anota como quedo el precio de una receta despues de un cambio y devuelve el

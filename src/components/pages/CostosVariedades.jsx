@@ -2,7 +2,12 @@ import { useMemo } from "react";
 import { useParams, Link, Navigate } from "react-router-dom";
 import { useMush } from "../../context/MushContext";
 import { productosDeCatalogo, variedadesDe } from "../../data/productos";
-import { buscarReceta, costearProducto, PARTE_TOTAL } from "../../utils/costos";
+import { buscarReceta, costearProducto, PARTES_COSTO } from "../../utils/costos";
+
+// El packaging y la mano de obra son los mismos en todas las variedades: se ven
+// una sola vez, en la tarjeta del producto que las agrupa. Lo propio de cada una
+// son sus ingredientes.
+const PARTES = PARTES_COSTO.filter((parte) => parte.id === "ingredientes");
 import TarjetaCosto from "../shared/TarjetaCosto.jsx";
 
 /**
@@ -14,8 +19,9 @@ import TarjetaCosto from "../shared/TarjetaCosto.jsx";
  * cualquier otro producto.
  */
 
-// El mismo ancho que la lista de Costos, para que se lean como la misma pantalla.
-const ANCHO_BLOQUE = "920px";
+// Mas angosto que la lista de Costos: cada variedad muestra una sola caja, y
+// con el ancho completo quedaba media tarjeta vacia.
+const ANCHO_BLOQUE = "600px";
 
 const CostosVariedades = () => {
   const { slug } = useParams();
@@ -76,9 +82,10 @@ const CostosVariedades = () => {
           <TarjetaCosto
             key={variedad.slug}
             {...variedad}
-            enlaceDe={(parte, slug) =>
-              parte === PARTE_TOTAL.id ? null : `/costos/${slug}/${parte}`
-            }
+            partes={PARTES}
+            conTotal={false}
+            subtitulo={`por ${variedad.costo.unidad}`}
+            enlaceDe={(parte, slug) => `/costos/${slug}/${parte}`}
           />
         ))}
       </div>

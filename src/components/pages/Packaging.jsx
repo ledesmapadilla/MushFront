@@ -1,4 +1,5 @@
 import { useState } from "react";
+import BotonExcel from "../shared/BotonExcel.jsx";
 import { useMush } from "../../context/MushContext";
 import BuscadorFiltro from "../shared/BuscadorFiltro.jsx";
 import Swal from "sweetalert2";
@@ -194,6 +195,11 @@ const Packaging = () => {
                   />
                 </div>
               )}
+              <BotonExcel
+                titulo="Packaging"
+                columnas={["Packaging","Unidad","Observaciones"]}
+                filas={() => packagingFiltrado.map((item) => [item.nombre, item.unidad, item.observaciones])}
+              />
               <button type="button" className="btn-mush text-nowrap" onClick={handleAbrirNuevo}>
                 Nuevo Packaging
               </button>

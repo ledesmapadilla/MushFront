@@ -8,12 +8,12 @@ import RecetaDetalle from "./components/pages/RecetaDetalle.jsx";
 import StockInsumos from "./components/pages/StockInsumos.jsx";
 import Produccion from "./components/pages/Produccion.jsx";
 import CostosFinanzas from "./components/pages/CostosFinanzas.jsx";
-import Ventas from "./components/pages/Ventas.jsx";
 import AltaAlfajores from "./components/pages/AltaAlfajores.jsx";
 import AltaIngredientes from "./components/pages/AltaIngredientes.jsx";
 import Packaging from "./components/pages/Packaging.jsx";
 import AltaPersonal from "./components/pages/AltaPersonal.jsx";
 import Precios from "./components/pages/Precios.jsx";
+import Ventas from "./components/pages/Ventas.jsx";
 import Costos from "./components/pages/Costos.jsx";
 import CostoDetalle from "./components/pages/CostoDetalle.jsx";
 import CostosVariedades from "./components/pages/CostosVariedades.jsx";
@@ -52,6 +52,8 @@ function App() {
             <Route path="/costos/:slug/:parte" element={<CostoDetalle />} />
             <Route path="/precios-venta" element={<PreciosVenta />} />
             <Route path="/ventas" element={<Ventas />} />
+            {/* La pantalla nueva de ventas todavia no existe */}
+            <Route path="/ventas-nuevo" element={<Error404 />} />
             <Route path="*" element={<Error404 />} />
           </Routes>
         </main>
