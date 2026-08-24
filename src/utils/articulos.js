@@ -90,6 +90,9 @@ export const articulosDeVenta = (alfajores, recetas, datos) => {
           : costoUnitario;
 
       return {
+        // El producto entero, para poder guardarle el precio.
+        producto,
+        precios: producto.precios || {},
         id: producto.id,
         nombre: producto.nombre,
         emoji: producto.emoji || "",

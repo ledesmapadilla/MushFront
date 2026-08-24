@@ -19,7 +19,32 @@ const FORM_INICIAL = {
   nombre: "",
   categoria: "Alfajor",
   observaciones: "",
+  emoji: "",
+  // De que receta sale el costo.
+  receta: "",
+  // "unidad" o "caja".
+  presentacion: "unidad",
+  unidades: "",
+  carton: "",
+  // Las cajas que llevan productos distintos declaran su contenido.
+  armada: false,
+  composicion: [],
+  activo: true,
 };
+
+const COMPONENTE_VACIO = { receta: "", cantidad: "" };
+
+// Un nombre sin mayusculas, tildes, signos ni plurales: sirve para comparar
+// "Nuez" con "Nueces" y "Clasico" con "Clasico".
+const normalizar = (txt) =>
+  String(txt)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]/g, "")
+    .replace(/ces$/, "z")
+    .replace(/es$/, "")
+    .replace(/s$/, "");
 
 // Configuración base de SweetAlert en tema claro y formato compacto
 const swalConfig = {
@@ -34,7 +59,18 @@ const swalConfig = {
 };
 
 const AltaAlfajores = () => {
-  const { alfajores, guardarAlfajor, eliminarAlfajor } = useMush();
+  const { alfajores, recetas, packaging, guardarAlfajor, eliminarAlfajor } = useMush();
+
+  // Lo que se puede elegir en el alta: las recetas cargadas y las cajas de
+  // carton del packaging.
+  const recetasOrdenadas = [...(recetas || [])].sort((a, b) =>
+    (a.nombre || "").localeCompare(b.nombre || "", "es", { sensitivity: "base" })
+  );
+
+  const cartones = (packaging || []).filter((item) => /caja/i.test(item.nombre || ""));
+
+  const nombreDeReceta = (slug) =>
+    (recetas || []).find((r) => r.slug === slug)?.nombre || slug;
 
   const [form, setForm] = useState(FORM_INICIAL);
   const [modoEdicion, setModoEdicion] = useState(false);
@@ -42,9 +78,55 @@ const AltaAlfajores = () => {
   const [busqueda, setBusqueda] = useState("");
   const [errorNombre, setErrorNombre] = useState("");
 
+  // Una fila sin producto elegido esta a medio cargar: no cuenta.
+  const componentesValidos = (lista) =>
+    (lista || []).filter((c) => c.receta && Number(c.cantidad) > 0);
+
+  const cambiarComponente = (indice, campo, valor) =>
+    setForm((prev) => ({
+      ...prev,
+      composicion: prev.composicion.map((c, i) => (i === indice ? { ...c, [campo]: valor } : c)),
+    }));
+
+  const agregarComponente = () =>
+    setForm((prev) => ({ ...prev, composicion: [...prev.composicion, { ...COMPONENTE_VACIO }] }));
+
+  const quitarComponente = (indice) =>
+    setForm((prev) => ({
+      ...prev,
+      composicion: prev.composicion.filter((_, i) => i !== indice),
+    }));
+
+  /**
+   * La receta que corresponde a un nombre de producto.
+   *
+   * "Clasico Semiamargo (CAJA x 6)" sale de la receta "Clasico Semiamargo": se
+   * ignora lo que va entre parentesis y se busca la que mas se parece. Es una
+   * ayuda para no tener que elegirla a mano, no una regla: el campo queda a la
+   * vista y se puede cambiar.
+   */
+  const recetaQueSugiere = (nombre) => {
+    const limpio = normalizar(String(nombre).replace(/(.*)/g, ""));
+    if (limpio.length < 3) return "";
+
+    // Gana la de nombre mas largo que este contenida: asi "Mini Semi" no le
+    // gana a "Mini Semiamargo".
+    return (recetasOrdenadas
+      .map((receta) => ({ receta, clave: normalizar(receta.nombre || "") }))
+      .filter(({ clave }) => clave && (limpio.includes(clave) || clave.includes(limpio)))
+      .sort((a, b) => b.clave.length - a.clave.length)[0] || {}
+    ).receta?.slug || "";
+  };
+
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setForm((prev) => {
+      const proximo = { ...prev, [name]: type === "checkbox" ? checked : value };
+      // Al escribir el nombre se propone la receta, mientras no se haya elegido
+      // una a mano.
+      if (name === "nombre" && !prev.receta) proximo.receta = recetaQueSugiere(value);
+      return proximo;
+    });
     if (name === "nombre") {
       setErrorNombre("");
     }
@@ -59,10 +141,22 @@ const AltaAlfajores = () => {
 
   const handleEditar = (item) => {
     setForm({
+      ...FORM_INICIAL,
       id: item.id,
       nombre: item.nombre || "",
       categoria: item.categoria || "Alfajor",
       observaciones: item.observaciones || "",
+      emoji: item.emoji || "",
+      receta: item.receta || "",
+      presentacion: item.presentacion || "unidad",
+      unidades: item.unidades ? String(item.unidades) : "",
+      carton: item.carton || "",
+      armada: (item.composicion || []).length > 0,
+      composicion: (item.composicion || []).map((c) => ({
+        receta: c.receta || "",
+        cantidad: c.cantidad !== undefined ? String(c.cantidad) : "",
+      })),
+      activo: item.activo !== false,
     });
     setModoEdicion(true);
     setErrorNombre("");
@@ -90,16 +184,6 @@ const AltaAlfajores = () => {
       return;
     }
 
-    const normalizar = (txt) =>
-      txt
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-z0-9]/g, "")
-        .replace(/ces$/, "z")
-        .replace(/es$/, "")
-        .replace(/s$/, "");
-
     const canonicoNuevo = normalizar(nombreLimpio);
     const duplicado = (alfajores || []).find(
       (item) => item.id !== form.id && normalizar(item.nombre || "") === canonicoNuevo
@@ -107,6 +191,24 @@ const AltaAlfajores = () => {
 
     if (duplicado) {
       setErrorNombre(`Ya existe un producto registrado como "${duplicado.nombre}".`);
+      return;
+    }
+
+    if (!form.receta) {
+      setErrorNombre("Falta elegir de que receta sale el costo.");
+      return;
+    }
+
+    const esCaja = form.presentacion === "caja";
+    const componentes = componentesValidos(form.composicion);
+
+    if (esCaja && !form.armada && !(Number(form.unidades) > 0)) {
+      setErrorNombre("Una caja necesita cuantas unidades entran.");
+      return;
+    }
+
+    if (form.armada && componentes.length === 0) {
+      setErrorNombre("Una caja armada necesita al menos un producto adentro.");
       return;
     }
 
@@ -131,6 +233,21 @@ const AltaAlfajores = () => {
       nombre: nombreLimpio,
       categoria: form.categoria || "Alfajor",
       observaciones: form.observaciones ? form.observaciones.trim() : "",
+      emoji: (form.emoji || "").trim(),
+      receta: form.receta,
+      presentacion: form.presentacion,
+      // Una caja armada cuenta lo que lleva adentro; el total de unidades sale
+      // de sumar esas cantidades.
+      unidades: esCaja
+        ? form.armada
+          ? componentes.reduce((suma, c) => suma + Number(c.cantidad), 0)
+          : Number(form.unidades) || 0
+        : 0,
+      carton: esCaja ? form.carton : "",
+      composicion: form.armada
+        ? componentes.map((c) => ({ receta: c.receta, cantidad: Number(c.cantidad) }))
+        : [],
+      activo: form.activo !== false,
     };
 
     try {
@@ -212,8 +329,16 @@ const AltaAlfajores = () => {
               )}
               <BotonExcel
                 titulo="Productos"
-                columnas={["Producto","Categoria","Observaciones"]}
-                filas={() => productosFiltrados.map((item) => [item.nombre, item.categoria, item.observaciones])}
+                columnas={["Producto", "Categoria", "Se vende", "Receta", "Observaciones"]}
+                filas={() =>
+                  productosFiltrados.map((item) => [
+                    item.nombre,
+                    item.categoria,
+                    item.presentacion === "caja" ? `Caja x ${item.unidades}` : "Por unidad",
+                    item.receta ? nombreDeReceta(item.receta) : "",
+                    item.observaciones,
+                  ])
+                }
               />
               <button type="button" className="btn-mush text-nowrap" onClick={handleAbrirNuevo}>
                 Nuevo Producto
@@ -225,16 +350,17 @@ const AltaAlfajores = () => {
             <table className="table mush-tabla align-middle mb-0 text-nowrap">
               <thead>
                 <tr>
-                  <th style={{ width: "28%" }}>Producto</th>
-                  <th style={{ width: "14%" }}>Categoría</th>
-                  <th style={{ width: "40%" }}>Observaciones</th>
+                  <th style={{ width: "26%" }}>Producto</th>
+                  <th style={{ width: "12%" }}>Categoría</th>
+                  <th style={{ width: "22%" }}>Se vende</th>
+                  <th style={{ width: "22%" }}>Observaciones</th>
                   <th className="text-end" style={{ width: "18%" }}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {productosFiltrados.length === 0 ? (
                   <tr>
-                    <td colSpan="4" className="text-center py-4 text-secondary">
+                    <td colSpan="5" className="text-center py-4 text-secondary">
                       No hay productos cargados.
                     </td>
                   </tr>
@@ -258,10 +384,31 @@ const AltaAlfajores = () => {
                           {item.categoria || "Alfajor"}
                         </span>
                       </td>
+                      {/* De donde sale su costo y en que presentacion se vende */}
                       <td>
                         <span
                           className="text-secondary text-truncate d-block"
-                          style={{ fontSize: "0.8rem", maxWidth: "370px" }}
+                          style={{ fontSize: "0.8rem", maxWidth: "250px" }}
+                          title={item.receta ? nombreDeReceta(item.receta) : ""}
+                        >
+                          {item.receta ? (
+                            <>
+                              {item.presentacion === "caja" ? `Caja x ${item.unidades}` : "Por unidad"}
+                              <span className="ms-1" style={{ fontSize: "0.72rem" }}>
+                                de {nombreDeReceta(item.receta)}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-alerta">
+                              <i className="bi bi-exclamation-triangle-fill"></i> sin receta
+                            </span>
+                          )}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className="text-secondary text-truncate d-block"
+                          style={{ fontSize: "0.8rem", maxWidth: "250px" }}
                           title={item.observaciones}
                         >
                           {item.observaciones || "—"}
@@ -374,6 +521,199 @@ const AltaAlfajores = () => {
                     </select>
                   </div>
                 </div>
+
+                {/* De donde sale el costo y como se vende: sin esto el producto
+                    no puede aparecer en Lista de Precios. */}
+                <div className="row g-2 mb-2">
+                  <div className="col-8">
+                    <label className="form-label text-secondary fw-semibold mb-1" style={{ fontSize: "0.78rem" }}>
+                      Se costea con <span className="text-danger">*</span>
+                    </label>
+                    <select
+                      name="receta"
+                      className="form-select form-select-sm mush-input py-1 px-2"
+                      style={{ fontSize: "0.85rem" }}
+                      value={form.receta}
+                      onChange={handleChange}
+                    >
+                      <option value="">-- Elegir receta --</option>
+                      {recetasOrdenadas.map((receta) => (
+                        <option key={receta.slug} value={receta.slug}>
+                          {receta.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="col-4">
+                    <label className="form-label text-secondary fw-semibold mb-1" style={{ fontSize: "0.78rem" }}>
+                      Emoji
+                    </label>
+                    <input
+                      type="text"
+                      name="emoji"
+                      className="form-control form-control-sm mush-input py-1 px-2 text-center"
+                      style={{ fontSize: "0.85rem" }}
+                      placeholder="🍫"
+                      value={form.emoji}
+                      onChange={handleChange}
+                      autoComplete="off"
+                    />
+                  </div>
+                </div>
+
+                <div className="mb-2">
+                  <label className="form-label text-secondary fw-semibold mb-1 d-block" style={{ fontSize: "0.78rem" }}>
+                    Se vende
+                  </label>
+                  <div className="d-flex gap-3">
+                    {[
+                      { valor: "unidad", texto: "Por unidad" },
+                      { valor: "caja", texto: "Por caja" },
+                    ].map(({ valor, texto }) => (
+                      <label
+                        key={valor}
+                        className="d-flex align-items-center gap-1 text-white"
+                        style={{ fontSize: "0.82rem", cursor: "pointer" }}
+                      >
+                        <input
+                          type="radio"
+                          name="presentacion"
+                          className="form-check-input m-0"
+                          value={valor}
+                          checked={form.presentacion === valor}
+                          onChange={handleChange}
+                        />
+                        {texto}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {form.presentacion === "caja" && (
+                  <>
+                    <div className="row g-2 mb-2">
+                      <div className="col-4">
+                        <label className="form-label text-secondary fw-semibold mb-1" style={{ fontSize: "0.78rem" }}>
+                          Unidades
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          name="unidades"
+                          className="form-control form-control-sm mush-input mush-dato py-1 px-2 text-center"
+                          style={{ fontSize: "0.85rem" }}
+                          placeholder="0"
+                          value={
+                            form.armada
+                              ? componentesValidos(form.composicion).reduce(
+                                  (suma, c) => suma + Number(c.cantidad),
+                                  0
+                                ) || ""
+                              : form.unidades
+                          }
+                          onChange={handleChange}
+                          disabled={form.armada}
+                          autoComplete="off"
+                        />
+                      </div>
+
+                      <div className="col-8">
+                        <label className="form-label text-secondary fw-semibold mb-1" style={{ fontSize: "0.78rem" }}>
+                          Caja de carton
+                        </label>
+                        <select
+                          name="carton"
+                          className="form-select form-select-sm mush-input py-1 px-2"
+                          style={{ fontSize: "0.85rem" }}
+                          value={form.carton}
+                          onChange={handleChange}
+                        >
+                          <option value="">-- Sin caja --</option>
+                          {cartones.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.nombre}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="mb-2">
+                      <label
+                        className="d-flex align-items-center gap-2 text-white"
+                        style={{ fontSize: "0.82rem", cursor: "pointer" }}
+                      >
+                        <input
+                          type="checkbox"
+                          name="armada"
+                          className="form-check-input m-0"
+                          checked={form.armada}
+                          onChange={handleChange}
+                        />
+                        La caja lleva productos distintos
+                      </label>
+                    </div>
+
+                    {form.armada && (
+                      <div className="mush-card-elevada rounded-3 p-2 mb-2">
+                        {form.composicion.map((componente, indice) => (
+                          <div className="row g-2 mb-2" key={indice}>
+                            <div className="col-7">
+                              <select
+                                className="form-select form-select-sm mush-input py-1 px-2"
+                                style={{ fontSize: "0.85rem" }}
+                                value={componente.receta}
+                                onChange={(e) => cambiarComponente(indice, "receta", e.target.value)}
+                              >
+                                <option value="">-- Elegir --</option>
+                                {recetasOrdenadas.map((receta) => (
+                                  <option key={receta.slug} value={receta.slug}>
+                                    {receta.nombre}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="col-3">
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                className="form-control form-control-sm mush-input mush-dato py-1 px-2 text-center"
+                                style={{ fontSize: "0.85rem" }}
+                                placeholder="0"
+                                value={componente.cantidad}
+                                onChange={(e) =>
+                                  cambiarComponente(indice, "cantidad", e.target.value.replace(/[^0-9]/g, ""))
+                                }
+                                autoComplete="off"
+                              />
+                            </div>
+                            <div className="col-2 d-flex align-items-center">
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-danger py-0 px-2 d-inline-flex align-items-center"
+                                style={{ fontSize: "0.72rem", minHeight: "24px" }}
+                                onClick={() => quitarComponente(indice)}
+                                title="Quitar"
+                              >
+                                <i className="bi bi-trash"></i>
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+
+                        <button
+                          type="button"
+                          className="btn-mush-outline py-1 px-3"
+                          style={{ fontSize: "0.78rem" }}
+                          onClick={agregarComponente}
+                        >
+                          Agregar producto
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
 
                 <div className="mb-3">
                   <label className="form-label text-secondary fw-semibold mb-1" style={{ fontSize: "0.78rem" }}>
