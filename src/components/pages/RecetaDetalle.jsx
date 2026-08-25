@@ -27,6 +27,9 @@ const SECCIONES = [
     columnaGrid: "col-4",
     titulo: "Masa",
     detalle: (receta) => rindeDeReceta(receta),
+    // El rinde se carga aca: es el numero por el que se dividen estos
+    // ingredientes, que estan anotados por tanda.
+    editaRinde: true,
     // Se carga en la unidad que venga anotada, asi que lleva el conversor
     conversor: true,
     columna: "Ingrediente",
@@ -246,7 +249,7 @@ const RecetaDetalle = () => {
       slug: slugActual,
       nombre: nombreFormateado,
       categoria: "Alfajor",
-      rinde: 60,
+      rinde: 0,
       observaciones: "",
       ingredientes: [],
     };
@@ -617,6 +620,31 @@ const RecetaDetalle = () => {
       Object.entries(proximo).map(([clave, v]) => [clave, Number(v) || 0])
     );
     guardarReceta({ ...receta, gramos });
+  };
+
+  // --- El rinde de la receta ---------------------------------------------
+  // Cuantas unidades salen de una tanda de masa. Se carga al crear la receta
+  // desde el alta de Productos, pero si se puso mal hay que poder corregirlo:
+  // de este numero sale el costo de cada unidad.
+  const rindeGuardado = Number(receta.rinde) || 0;
+  const [rindeBorrador, setRindeBorrador] = useState("");
+
+  // Se escribe sin guardar (guarda al salir del campo), asi que el borrador
+  // solo se rearma cuando cambia el numero guardado: al abrir otra receta, al
+  // llegar los datos del servidor, o despues de guardar este mismo campo.
+  useEffect(() => {
+    setRindeBorrador(rindeGuardado ? String(rindeGuardado) : "");
+  }, [idReceta, rindeGuardado]);
+
+  const guardarRinde = () => {
+    const cantidad = Math.max(0, Math.round(Number(rindeBorrador) || 0));
+    // Sin cambio no se guarda: cada guardado manda la receta entera y queda
+    // anotado en el historial de precios.
+    if (cantidad === rindeGuardado) {
+      setRindeBorrador(cantidad ? String(cantidad) : "");
+      return;
+    }
+    guardarReceta({ ...receta, rinde: cantidad });
   };
 
   // --- Componentes de una fila -------------------------------------------
@@ -1226,12 +1254,54 @@ const RecetaDetalle = () => {
             >
               <i className="bi bi-arrow-left"></i>
             </Link>
-            <h2 className="mush-display text-white mb-0">
+            <h2 className="mush-display text-white mb-0 d-inline-flex align-items-center flex-wrap gap-2">
               {tituloDeSeccion(seccionActiva, receta)}
-              {seccionActiva.detalle && (
-                <span className="text-secondary fw-normal ms-2 text-lowercase" style={{ fontSize: "1rem" }}>
-                  ({seccionActiva.detalle(receta)})
+              {/* La seccion de la masa no muestra el rinde: lo pregunta. Es el
+                  unico lugar donde se puede corregir despues del alta. */}
+              {seccionActiva.editaRinde ? (
+                <span className="d-inline-flex align-items-center gap-2">
+                  <span
+                    className="text-secondary fw-normal text-lowercase"
+                    style={{ fontSize: "1rem" }}
+                  >
+                    una tanda rinde
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    aria-label={`Una tanda rinde, en ${unidadPlural(receta)}`}
+                    className="form-control form-control-sm mush-input mush-dato mush-sin-spinner py-1 px-2 text-center fw-bold"
+                    style={{ fontSize: "0.9rem", width: "90px" }}
+                    placeholder="0"
+                    value={rindeBorrador}
+                    onChange={(e) => setRindeBorrador(e.target.value)}
+                    onBlur={guardarRinde}
+                    autoComplete="off"
+                  />
+                  <span
+                    className="text-secondary fw-normal text-lowercase"
+                    style={{ fontSize: "1rem" }}
+                  >
+                    {unidadPlural(receta)}
+                  </span>
+                  {/* Sin el rinde los ingredientes de la tanda no se pueden
+                      repartir, asi que el costo por unidad no existe. */}
+                  {!rindeGuardado && (
+                    <span className="text-danger fw-normal" style={{ fontSize: "0.8rem" }}>
+                      sin esto no hay costo por unidad
+                    </span>
+                  )}
                 </span>
+              ) : (
+                seccionActiva.detalle && (
+                  <span
+                    className="text-secondary fw-normal text-lowercase"
+                    style={{ fontSize: "1rem" }}
+                  >
+                    ({seccionActiva.detalle(receta)})
+                  </span>
+                )
               )}
             </h2>
             <span className="mush-display text-secondary fs-2">-</span>
