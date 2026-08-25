@@ -7,9 +7,9 @@ import TarjetaCosto from "../shared/TarjetaCosto.jsx";
 import BotonExcel from "../shared/BotonExcel.jsx";
 
 /**
- * Costos por producto: los mismos 9 productos del catalogo, uno debajo del
- * otro, con el costo por unidad abierto en ingredientes, packaging y mano de
- * obra, y el total al final.
+ * Costos por producto: las mismas tarjetas que Recetas, una debajo de la otra,
+ * con el costo por unidad abierto en ingredientes, packaging y mano de obra, y
+ * el total al final. Cuales son sale del alta de Productos.
  *
  * A diferencia de Recetas, aca no es una grilla de tarjetas: cada tarjeta ya
  * muestra el dato, asi que ocupa el ancho completo y se lee de corrido. Cada

@@ -13,7 +13,8 @@ const Recetas = () => {
         {/* Header */}
         <h2 className="mush-display text-white text-center mb-3">Recetas</h2>
 
-        {/* Grid de 9 Tarjetas (3x3 fija y proporcionada) */}
+        {/* Una tarjeta por receta, de a tres por fila. Cuantas son lo dice el
+            alta de Productos, asi que la grilla crece sola. */}
         <div className="row g-2 g-sm-3">
           {listaBotones.map((r) => (
             <div className="col-4" key={r.slug}>

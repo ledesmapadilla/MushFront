@@ -22,6 +22,9 @@ const FORM_INICIAL = {
   emoji: "",
   // De que receta sale el costo.
   receta: "",
+  // Para cuantas unidades es una tanda de masa. Solo se pregunta cuando la
+  // receta se crea aca.
+  rinde: "",
   // "unidad" o "caja".
   presentacion: "unidad",
   unidades: "",
@@ -33,6 +36,26 @@ const FORM_INICIAL = {
 };
 
 const COMPONENTE_VACIO = { receta: "", cantidad: "" };
+
+// La opcion de "Se costea con" que no elige una receta existente sino que pide
+// una nueva, en blanco, para este producto.
+const RECETA_NUEVA = "__nueva__";
+
+/**
+ * En que se cuenta el rinde de una receta, segun la categoria del producto.
+ *
+ * Casi todo se cuenta en alfajores, pero una tableta rinde tabletas y el
+ * mendiant una lata. No es un detalle de texto: la mano de obra de lo que no se
+ * cuenta en alfajores se paga por hora y no por sueldo mensual.
+ */
+const UNIDAD_DE_RINDE = { Tableta: "tableta", Lata: "lata", Mendiant: "lata" };
+
+const unidadDeRinde = (categoria) => UNIDAD_DE_RINDE[categoria] || "alfajores";
+
+const unidadDeRindeEnPlural = (categoria) => {
+  const unidad = unidadDeRinde(categoria);
+  return unidad.endsWith("s") ? unidad : `${unidad}s`;
+};
 
 // Un nombre sin mayusculas, tildes, signos ni plurales: sirve para comparar
 // "Nuez" con "Nueces" y "Clasico" con "Clasico".
@@ -59,7 +82,8 @@ const swalConfig = {
 };
 
 const AltaAlfajores = () => {
-  const { alfajores, recetas, packaging, guardarAlfajor, eliminarAlfajor } = useMush();
+  const { alfajores, recetas, packaging, guardarAlfajor, eliminarAlfajor, guardarReceta } =
+    useMush();
 
   // Lo que se puede elegir en el alta: las recetas cargadas y las cajas de
   // carton del packaging.
@@ -77,6 +101,9 @@ const AltaAlfajores = () => {
   const [mostrarModal, setMostrarModal] = useState(false);
   const [busqueda, setBusqueda] = useState("");
   const [errorNombre, setErrorNombre] = useState("");
+  // Mientras la receta no se haya tocado a mano, se sigue proponiendo sola al
+  // escribir el nombre.
+  const [recetaAMano, setRecetaAMano] = useState(false);
 
   // Una fila sin producto elegido esta a medio cargar: no cuenta.
   const componentesValidos = (lista) =>
@@ -106,7 +133,7 @@ const AltaAlfajores = () => {
    * vista y se puede cambiar.
    */
   const recetaQueSugiere = (nombre) => {
-    const limpio = normalizar(String(nombre).replace(/(.*)/g, ""));
+    const limpio = normalizar(String(nombre).replace(/\([^)]*\)/g, ""));
     if (limpio.length < 3) return "";
 
     // Gana la de nombre mas largo que este contenida: asi "Mini Semi" no le
@@ -118,15 +145,73 @@ const AltaAlfajores = () => {
     ).receta?.slug || "";
   };
 
+  /**
+   * El slug de la receta nueva sale del nombre del producto. Si ya hay una
+   * receta con ese slug se le agrega un numero: dos productos distintos no
+   * pueden terminar escribiendo sobre la misma receta.
+   */
+  const slugLibre = (nombre) => {
+    const base =
+      nombre
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 40) || "receta";
+
+    const ocupado = (slug) => (recetas || []).some((r) => r.slug === slug || r.id === slug);
+    if (!ocupado(base)) return base;
+
+    let n = 2;
+    while (ocupado(`${base}-${n}`)) n += 1;
+    return `${base}-${n}`;
+  };
+
+  /**
+   * Una receta vacia, con la forma que espera la pantalla de Recetas: con su
+   * rinde, pero sin ingredientes y sin mano de obra. El producto va a costar
+   * cero hasta que se le carguen, y Costos y Lista de Precios lo avisan.
+   */
+  const recetaEnBlanco = (slug, nombre, categoria, rinde) => ({
+    id: slug,
+    slug,
+    nombre,
+    categoria,
+    rinde,
+    unidadRinde: unidadDeRinde(categoria),
+    observaciones: "",
+    ingredientes: [],
+    sinSecciones: [],
+    gramos: {},
+    manoDeObra: {},
+  });
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setForm((prev) => {
       const proximo = { ...prev, [name]: type === "checkbox" ? checked : value };
       // Al escribir el nombre se propone la receta, mientras no se haya elegido
-      // una a mano.
-      if (name === "nombre" && !prev.receta) proximo.receta = recetaQueSugiere(value);
+      // una a mano. Si el nombre no se parece a ninguna, lo que se propone es
+      // crear una: un producto que no existia todavia trae su propia receta.
+      if (name === "nombre" && !recetaAMano) {
+        proximo.receta = recetaQueSugiere(value) || (value.trim() ? RECETA_NUEVA : "");
+      }
+      // Una caja no se hace aparte: sale de la receta de lo que lleva adentro.
+      // Si lo propuesto era crear una, se pide elegirla.
+      if (
+        name === "presentacion" &&
+        value === "caja" &&
+        !recetaAMano &&
+        prev.receta === RECETA_NUEVA
+      ) {
+        proximo.receta = "";
+      }
       return proximo;
     });
+    if (name === "receta") {
+      setRecetaAMano(true);
+    }
     if (name === "nombre") {
       setErrorNombre("");
     }
@@ -136,6 +221,7 @@ const AltaAlfajores = () => {
     setForm(FORM_INICIAL);
     setModoEdicion(false);
     setErrorNombre("");
+    setRecetaAMano(false);
     setMostrarModal(true);
   };
 
@@ -160,6 +246,9 @@ const AltaAlfajores = () => {
     });
     setModoEdicion(true);
     setErrorNombre("");
+    // Un producto que ya existe tiene su receta elegida: renombrarlo no se la
+    // cambia.
+    setRecetaAMano(true);
     setMostrarModal(true);
   };
 
@@ -167,6 +256,7 @@ const AltaAlfajores = () => {
     setForm(FORM_INICIAL);
     setModoEdicion(false);
     setErrorNombre("");
+    setRecetaAMano(false);
     setMostrarModal(false);
   };
 
@@ -199,6 +289,15 @@ const AltaAlfajores = () => {
       return;
     }
 
+    // Sin el rinde no se puede costear nada: los ingredientes de la masa se
+    // anotan por tanda y se dividen por este numero.
+    if (form.receta === RECETA_NUEVA && !(Number(form.rinde) > 0)) {
+      setErrorNombre(
+        `Falta decir para cuantos ${unidadDeRindeEnPlural(form.categoria)} es la masa.`
+      );
+      return;
+    }
+
     const esCaja = form.presentacion === "caja";
     const componentes = componentesValidos(form.composicion);
 
@@ -227,6 +326,20 @@ const AltaAlfajores = () => {
 
     const itemPrevio = alfajores.find((a) => a.id === form.id) || {};
 
+    // Un producto que no sale de ninguna receta cargada trae la suya, vacia:
+    // queda su tarjeta en Recetas y en Costos para ir a llenarla.
+    const recetaCreada =
+      form.receta === RECETA_NUEVA
+        ? recetaEnBlanco(
+            slugLibre(nombreLimpio),
+            nombreLimpio,
+            form.categoria || "Alfajor",
+            Number(form.rinde)
+          )
+        : null;
+
+    if (recetaCreada) guardarReceta(recetaCreada);
+
     const productoAGuardar = {
       ...itemPrevio,
       id: idFinal || "",
@@ -234,7 +347,7 @@ const AltaAlfajores = () => {
       categoria: form.categoria || "Alfajor",
       observaciones: form.observaciones ? form.observaciones.trim() : "",
       emoji: (form.emoji || "").trim(),
-      receta: form.receta,
+      receta: recetaCreada ? recetaCreada.slug : form.receta,
       presentacion: form.presentacion,
       // Una caja armada cuenta lo que lleva adentro; el total de unidades sale
       // de sumar esas cantidades.
@@ -256,8 +369,11 @@ const AltaAlfajores = () => {
       Swal.fire({
         ...swalConfig,
         title: "Producto guardado",
+        text: recetaCreada
+          ? `Se creo la receta "${recetaCreada.nombre}", vacia. Cargale los ingredientes en Recetas para que tenga costo.`
+          : undefined,
         icon: "success",
-        timer: 1400,
+        timer: recetaCreada ? 3200 : 1400,
         showConfirmButton: false,
       });
 
@@ -537,6 +653,7 @@ const AltaAlfajores = () => {
                       onChange={handleChange}
                     >
                       <option value="">-- Elegir receta --</option>
+                      <option value={RECETA_NUEVA}>+ Crear la receta de este producto</option>
                       {recetasOrdenadas.map((receta) => (
                         <option key={receta.slug} value={receta.slug}>
                           {receta.nombre}
@@ -561,6 +678,39 @@ const AltaAlfajores = () => {
                     />
                   </div>
                 </div>
+
+                {/* La receta nueva necesita su rinde antes de existir: los
+                    ingredientes de la masa se anotan por tanda, asi que sin
+                    este numero no hay costo por unidad. Es lo unico que se
+                    pregunta aca; el resto se carga despues, en Recetas. */}
+                {form.receta === RECETA_NUEVA && (
+                  <div className="bg-ok-suave border-ok border rounded-3 p-2 mb-2">
+                    <div className="d-flex align-items-center gap-2 flex-wrap">
+                      <span className="text-white fw-semibold" style={{ fontSize: "0.82rem" }}>
+                        Una tanda de masa rinde <span className="text-danger">*</span>
+                      </span>
+                      <input
+                        type="number"
+                        name="rinde"
+                        min="1"
+                        step="1"
+                        className="form-control form-control-sm mush-input py-1 px-2 text-center"
+                        style={{ fontSize: "0.85rem", width: "95px" }}
+                        placeholder="126"
+                        value={form.rinde}
+                        onChange={handleChange}
+                        autoComplete="off"
+                      />
+                      <span className="text-white" style={{ fontSize: "0.82rem" }}>
+                        {unidadDeRindeEnPlural(form.categoria)}
+                      </span>
+                    </div>
+                    <p className="text-ok mb-0 mt-1" style={{ fontSize: "0.72rem" }}>
+                      La receta se crea vacia, con su tarjeta en Recetas y en Costos para
+                      cargarle los ingredientes.
+                    </p>
+                  </div>
+                )}
 
                 <div className="mb-2">
                   <label className="form-label text-secondary fw-semibold mb-1 d-block" style={{ fontSize: "0.78rem" }}>

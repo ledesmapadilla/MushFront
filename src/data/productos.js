@@ -1,22 +1,11 @@
 /**
- * Catalogo de productos de MUSH.
+ * Las variedades, y el catalogo de lo que se hace.
  *
- * Es la unica lista: las pantallas que muestran la grilla de tarjetas de
- * productos (Recetas, Costos) la importan de aca para que siempre sean
- * exactamente las mismas tarjetas.
+ * Las tarjetas de Recetas y de Costos ya no estan escritas aca: salen del alta
+ * de Productos, que es la unica lista. Cada producto declara con que receta se
+ * costea, y esa receta es la tarjeta. Dos presentaciones de lo mismo (la unidad
+ * y su caja de 6) comparten receta, asi que son una sola tarjeta.
  */
-export const PRODUCTOS_BASE = [
-  { slug: "clasico-semiamargo", nombre: "Clasico Semiamargo", categoria: "Alfajor", imagen: "🍫" },
-  { slug: "clasico-blanco", nombre: "Clasico Blanco", categoria: "Alfajor", imagen: "🥛" },
-  { slug: "maicena", nombre: "Maicena", categoria: "Alfajor", imagen: "🌽" },
-  { slug: "alfajor-de-nuez", nombre: "Alfajor de Nuez", categoria: "Alfajor", imagen: "🌰" },
-  { slug: "alfajor-de-pistacho", nombre: "Alfajor de Pistacho", categoria: "Alfajor", imagen: "🟢" },
-  { slug: "mini-semi", nombre: "Mini Semiamargo", categoria: "Mini", imagen: "🍪" },
-  { slug: "mini-blanco", nombre: "Mini Blanco", categoria: "Mini", imagen: "🤍" },
-  // Arranca otra familia de productos: las listas lo marcan con una linea.
-  { slug: "mendiant", nombre: "Mendiant", categoria: "Mendiant", imagen: "🙇", corte: true },
-  { slug: "tabletas-chocolate", nombre: "Tabletas de Chocolate", categoria: "Tableta", imagen: "🟫" },
-];
 
 /**
  * Productos que en vez de una receta propia agrupan variedades. Al abrirlos se
@@ -45,20 +34,31 @@ export const productoDeVariedad = (slug) =>
     VARIEDADES[padre].some((v) => v.slug === slug)
   ) || null;
 
-const canonico = (texto) => (texto || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-
 /**
- * Combina el catalogo base con los productos dados de alta: si el alfajor ya
- * existe en el sistema manda su nombre y su categoria.
+ * Una tarjeta por receta usada en el alta de Productos.
+ *
+ * El nombre, la categoria y el emoji salen del producto que la usa. Cuando son
+ * varios manda el que se vende suelto: la tarjeta se llama "Clasico Semiamargo"
+ * y no "Clasico semiamargo (CAJA x 6)".
+ *
+ * El orden es el del alta, asi que un producto nuevo aparece sin tocar codigo.
  */
-export const productosDeCatalogo = (alfajores) =>
-  PRODUCTOS_BASE.map((base) => {
-    const coincidencia = (alfajores || []).find(
-      (a) => canonico(a.nombre) === canonico(base.nombre)
-    );
-    return {
-      ...base,
-      nombre: coincidencia ? coincidencia.nombre : base.nombre,
-      categoria: coincidencia?.categoria || base.categoria,
-    };
-  });
+export const productosDeCatalogo = (alfajores) => {
+  const porReceta = new Map();
+
+  (alfajores || [])
+    .filter((producto) => producto.activo !== false && producto.receta)
+    .forEach((producto) => {
+      const anterior = porReceta.get(producto.receta);
+      const manda =
+        !anterior || (anterior.presentacion === "caja" && producto.presentacion !== "caja");
+      if (manda) porReceta.set(producto.receta, producto);
+    });
+
+  return [...porReceta].map(([slug, producto]) => ({
+    slug,
+    nombre: producto.nombre,
+    categoria: producto.categoria || "Alfajor",
+    imagen: producto.emoji || "\u{1F36A}",
+  }));
+};

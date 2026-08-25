@@ -127,7 +127,10 @@ const etiquetaCostoMO = (receta) => `Costo M.O por ${unidadSingular(receta)}`;
 // El rinde se expresa en la unidad de la receta: casi siempre alfajores, pero
 // el mendiant, por ejemplo, rinde una lata.
 const rindeDeReceta = (receta) => {
-  const cantidad = receta?.rinde || 60;
+  const cantidad = Number(receta?.rinde) || 0;
+  // Una receta sin rinde no rinde 60: no se sabe. Decirlo es lo unico honesto,
+  // porque de ese numero sale el costo de cada unidad.
+  if (!cantidad) return "sin rinde cargado";
   const unidad = receta?.unidadRinde || "alfajores";
   const enPlural = cantidad === 1 || unidad.endsWith("s") ? unidad : `${unidad}s`;
   return `${cantidad} ${enPlural}`;
