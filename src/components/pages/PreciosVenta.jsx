@@ -447,7 +447,7 @@ const PreciosVenta = () => {
               <thead>
                 <tr className="text-center" style={{ height: ALTO_CABECERA }}>
                   {/* Cuando se actualizo por ultima vez el precio */}
-                  <th style={{ width: "88px" }}>
+                  <th style={{ width: "82px" }}>
                     {/* El titulo hereda mayusculas y espaciado de los encabezados:
                         con un texto largo eso solo lo agranda. */}
                     <span
@@ -460,19 +460,25 @@ const PreciosVenta = () => {
                   <th>
                     <span className="mush-th-caja">Producto</span>
                   </th>
-                  <th style={{ width: "100px" }}>
+                  <th style={{ width: "84px" }}>
                     <span className="mush-th-caja">Costos</span>
                   </th>
-                  <th style={{ width: "60px" }}>
-                    <span className="mush-th-caja" style={{ fontSize: "0.62rem" }}>
+                  <th style={{ width: "68px" }}>
+                    <span
+                      className="mush-th-caja"
+                      style={{ fontSize: "0.62rem", letterSpacing: "normal" }}
+                    >
                       {porCaja ? (
-                        <>
+                        /* Los dos renglones van dentro de un mismo span: la caja
+                           del titulo es flex y ahi el salto de linea suelto no
+                           corta nada, deja los pedazos uno al lado del otro. */
+                        <span>
                           {/* Los encabezados van en mayusculas por CSS: la x se
                               excluye para que no se convierta en X. */}
                           Un.
                           <br />
                           <span style={{ textTransform: "none" }}>x</span> caja
-                        </>
+                        </span>
                       ) : (
                         "Un"
                       )}
@@ -482,12 +488,12 @@ const PreciosVenta = () => {
                     <th
                       key={id}
                       className={`${color} ${i === 0 ? "mush-col-doble" : ""}`}
-                      style={{ width: "120px" }}
+                      style={{ width: "110px" }}
                     >
                       <span className="mush-th-caja">{titulo}</span>
                     </th>
                   ))}
-                  <th className="mush-col-doble" style={{ width: "74px" }}>
+                  <th className="mush-col-doble" style={{ width: "66px" }}>
                     {/* La columna es angosta: el titulo entra con la letra mas chica */}
                     <span
                       className="mush-th-caja"
@@ -513,21 +519,15 @@ const PreciosVenta = () => {
                       </td>
 
                       <td>
-                        {/* La aclaracion va debajo del nombre: al lado le comia el
-                            ancho y le cortaba la palabra. */}
-                        <span className="d-flex align-items-center gap-2">
-                          <span style={{ fontSize: "0.85rem" }}>{fila.emoji}</span>
-                          <span className="d-block text-truncate">
-                            <strong
-                              className="text-white d-block text-truncate"
-                              style={{ fontSize: "0.75rem", lineHeight: 1.15 }}
-                              title={fila.nombre}
-                            >
-                              {fila.nombre}
-                            </strong>
-
-                          </span>
-                        </span>
+                        {/* Sin el emoji adelante: le comia ancho al nombre, que es
+                           lo que hay que poder leer entero. */}
+                        <strong
+                          className="text-white d-block text-truncate"
+                          style={{ fontSize: "0.75rem", lineHeight: 1.15 }}
+                          title={fila.nombre}
+                        >
+                          {fila.nombre}
+                        </strong>
                       </td>
 
                       {/* El costo es calculado: no se edita */}
@@ -572,7 +572,7 @@ const PreciosVenta = () => {
               </tbody>
             </table>
 
-            {tablaBloque(DESCUENTOS, "92px", (fila, { id }) => (
+            {tablaBloque(DESCUENTOS, "84px", (fila, { id }) => (
               <span className="d-flex align-items-center justify-content-center gap-1">
                 {campo(fila, id, "48px")}
                 <span className="text-secondary" style={{ fontSize: "0.72rem" }}>
@@ -582,7 +582,7 @@ const PreciosVenta = () => {
             ))}
 
             {/* Los margenes van en porcentaje, con el signo al lado */}
-            {tablaBloque(MARGENES, "168px", (fila, { id, canal }) =>
+            {tablaBloque(MARGENES, "160px", (fila, { id, canal }) =>
               canal ? (
                 <span className="mush-dato d-block text-center" style={{ fontSize: "0.8rem" }}>
                   {porcentaje(margenRealDeCanal(fila, canal))}
@@ -597,7 +597,7 @@ const PreciosVenta = () => {
               )
             )}
 
-            {tablaBloque(GANANCIAS, "236px", (fila, { canal }) => (
+            {tablaBloque(GANANCIAS, "216px", (fila, { canal }) => (
               <span className="mush-dato d-block text-center" style={{ fontSize: "0.95rem" }}>
                 {moneda(gananciaDeCanal(fila, canal), 2)}
               </span>
