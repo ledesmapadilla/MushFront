@@ -29,23 +29,15 @@ export const tipoDe = (item) =>
 export const esSubproducto = (item) => tipoDe(item) === SUBPRODUCTO;
 
 /**
- * Productos que en vez de una receta propia agrupan variedades. Al abrirlos se
- * muestran estas tarjetas, y cada una es una receta como cualquier otra.
+ * Productos que en vez de una receta propia agrupan variedades: al abrirlos se
+ * muestran esas tarjetas en vez de las secciones, y cada una es una receta.
+ *
+ * Hoy no hay ninguno. Lo estaban las tabletas, con sus diez sabores colgando de
+ * "Tabletas Chocolate", hasta que cada sabor paso a ser un producto del alta,
+ * con su receta y su precio, como cualquier otro. El mecanismo queda por si
+ * algun producto vuelve a agrupar.
  */
-export const VARIEDADES = {
-  "tabletas-chocolate": [
-    { slug: "tableta-con-leche-krispi", nombre: "Tableta con leche Krispi", imagen: "🌾" },
-    { slug: "tableta-con-leche-avellana", nombre: "Tableta con leche Avellana", imagen: "🌰" },
-    { slug: "tableta-con-leche-marroc", nombre: "Tableta con leche Marroc", imagen: "🍬" },
-    { slug: "tableta-con-leche-garrapinada", nombre: "Tableta con leche Garrapiñada", imagen: "🥜" },
-    { slug: "tableta-blanco-castana", nombre: "Tableta blanco Castaña", imagen: "🤎" },
-    { slug: "tableta-blanco-pistacho", nombre: "Tableta blanco Pistacho", imagen: "🟢" },
-    { slug: "tableta-blanco-coco", nombre: "Tableta blanco Coco", imagen: "🥥" },
-    { slug: "tableta-blanco-frutos", nombre: "Tableta blanco Frutos", imagen: "🍓" },
-    { slug: "tableta-semiamargo-almendras", nombre: "Tableta semiamargo Almendras", imagen: "🫒" },
-    { slug: "tableta-semiamargo-cacao", nombre: "Tableta semiamargo Cacao", imagen: "🍩" },
-  ],
-};
+export const VARIEDADES = {};
 
 export const variedadesDe = (slug) => VARIEDADES[slug] || [];
 
