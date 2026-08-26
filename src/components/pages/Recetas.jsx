@@ -9,7 +9,10 @@ const Recetas = () => {
 
   return (
     <div className="container py-4">
-      <div className="mx-auto" style={{ maxWidth: "650px", width: "100%" }}>
+      {/* El pie de pagina es fixed-bottom y flota sobre el contenido: sin este
+          hueco, la ultima fila de tarjetas queda tapada y no hay scroll que la
+          alcance. */}
+      <div className="mx-auto" style={{ maxWidth: "650px", width: "100%", paddingBottom: "75px" }}>
         {/* Header */}
         <h2 className="mush-display text-white text-center mb-3">Recetas</h2>
 

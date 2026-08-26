@@ -50,10 +50,21 @@ const BloquesCosto = ({
             : ""
       }`}
     >
-      {visibles.map(({ id, titulo, campo }) => {
+      {visibles.map(({ id, titulo, campo, secciones }) => {
         const destino = enlaceDe ? enlaceDe(id) : null;
         const esTotal = id === PARTE_TOTAL.id;
         const esActiva = !soloActiva && id === activa && !esTotal;
+        // La receta puede declarar que no lleva esta parte: ahi el cero es el
+        // numero correcto y no hay nada que avisar.
+        const noUtiliza =
+          !esTotal &&
+          (secciones || []).length > 0 &&
+          secciones.every((s) => (costo.sinUso || []).includes(s));
+
+        // Un cero sin esa declaracion es otra cosa: que en la receta no se
+        // cargo nada. Se dice en la caja de esa parte, que es donde se lo puede
+        // corregir; el total se sigue mostrando, aunque le falte esto.
+        const sinCompletar = !esTotal && !noUtiliza && !(Number(costo[campo]) > 0);
 
         const clases = [
           "mush-card-elevada h-100 rounded-3 px-2 py-2 text-center",
@@ -61,6 +72,7 @@ const BloquesCosto = ({
           // El total lleva su color; una parte elegida, el tinte de la pantalla.
           esTotal ? "mush-caja-resultado" : "",
           esActiva ? "bg-dulce-suave border-dulce" : "",
+          sinCompletar ? "mush-caja-sin-completar" : "",
           destino ? "mush-card-hover" : "",
         ]
           .filter(Boolean)
@@ -71,12 +83,27 @@ const BloquesCosto = ({
             <span className="mush-kicker d-block mb-1 text-truncate">{titulo}</span>
             {/* Las partes se leen mas apagadas que el total: el que interesa de
                 un vistazo es el total, las otras tres son el desglose. */}
-            <span
-              className={`mush-dato d-block text-nowrap ${esTotal ? "" : "text-secondary"}`}
-              style={{ fontSize: "1rem" }}
-            >
-              {moneda(costo[campo], 2)}
-            </span>
+            {noUtiliza ? (
+              <span className="text-secondary d-block lh-sm" style={{ fontSize: "0.75rem" }}>
+                no utiliza
+              </span>
+            ) : sinCompletar ? (
+              <span
+                className="text-danger fw-normal d-block lh-sm"
+                style={{ fontSize: "0.72rem" }}
+              >
+                <i className="bi bi-exclamation-triangle-fill"></i> sin completar
+                <br />
+                en la receta
+              </span>
+            ) : (
+              <span
+                className={`mush-dato d-block text-nowrap ${esTotal ? "" : "text-secondary"}`}
+                style={{ fontSize: "1rem" }}
+              >
+                {moneda(costo[campo], 2)}
+              </span>
+            )}
           </>
         );
 
@@ -91,7 +118,11 @@ const BloquesCosto = ({
                 to={destino}
                 className={clases}
                 style={{ height: ALTO_BLOQUE }}
-                title={`Ver de donde sale ${titulo.toLowerCase()}`}
+                title={
+                  sinCompletar
+                    ? `Falta cargar ${titulo.toLowerCase()} en la receta`
+                    : `Ver de donde sale ${titulo.toLowerCase()}`
+                }
               >
                 {contenido}
               </Link>

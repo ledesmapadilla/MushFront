@@ -27,9 +27,6 @@ const SECCIONES = [
     columnaGrid: "col-4",
     titulo: "Masa",
     detalle: (receta) => rindeDeReceta(receta),
-    // El rinde se carga aca: es el numero por el que se dividen estos
-    // ingredientes, que estan anotados por tanda.
-    editaRinde: true,
     // Se carga en la unidad que venga anotada, asi que lleva el conversor
     conversor: true,
     columna: "Ingrediente",
@@ -46,6 +43,10 @@ const SECCIONES = [
     columnaGrid: "col-4",
     titulo: "Ingredientes",
     porUnidad: true,
+    // Hay recetas que no llevan ingredientes por producto: el mendiant se arma
+    // con la masa y nada mas. Poder declararlo distingue "no va nada aca" de
+    // "falta cargarlo", que es lo que avisa Costos.
+    etiquetaSinUso: "No utiliza ingredientes por producto",
     conversor: true,
     // Cada fila se puede desglosar en varios componentes; la cantidad que se ve
     // en la tabla es la suma de ellos.
@@ -64,6 +65,7 @@ const SECCIONES = [
     columnaGrid: "col-4",
     titulo: "Packaging",
     porUnidad: true,
+    etiquetaSinUso: "No utiliza packaging",
     columna: "Packaging",
     catalogo: "packaging",
     unidades: UNIDADES_PACKAGING,
@@ -107,10 +109,13 @@ SECCIONES.forEach((s) => {
   if (s.alfajoresBase) s.detalle = (receta) => `${s.alfajoresBase} ${unidadPlural(receta)}`;
 });
 
-// Las secciones "por unidad" cierran su titulo con la unidad de la receta:
-// "Packaging por alfajor" o "Packaging por lata".
-const tituloDeSeccion = (seccion, receta) =>
-  seccion.porUnidad ? `${seccion.titulo} por ${unidadSingular(receta)}` : seccion.titulo;
+// Las secciones "por unidad" cierran su titulo con "por producto".
+//
+// Antes cerraban con la unidad de cada receta ("por alfajor", "por lata"), y
+// entonces la misma tarjeta se llamaba distinto segun donde se la abriera. Se
+// dice "producto" para que todas las recetas muestren lo mismo.
+const tituloDeSeccion = (seccion) =>
+  seccion.porUnidad ? `${seccion.titulo} por producto` : seccion.titulo;
 
 const conMayuscula = (texto) => texto.charAt(0).toUpperCase() + texto.slice(1);
 
@@ -176,10 +181,16 @@ const esDeLaReceta = (seccion, receta) => {
   return !seccion.soloEn || seccion.soloEn.some((s) => normalizar(s) === slug);
 };
 
-// Las tarjetas de la portada: las que llevan "dentroDe" no son tarjetas, se
-// dibujan como una tabla mas dentro de su seccion.
-const seccionesDeReceta = (receta) =>
-  SECCIONES.filter((s) => !s.dentroDe && esDeLaReceta(s, receta));
+/**
+ * Las tarjetas de la portada: las que llevan "dentroDe" no son tarjetas, se
+ * dibujan como una tabla mas dentro de su seccion.
+ *
+ * Son las mismas en todas las recetas. Una que no aplique -el mendiant no lleva
+ * ingredientes por producto- queda vacia, que se lee mejor que una grilla
+ * distinta en cada receta: si falta una tarjeta no se sabe si es que no
+ * corresponde o si es que no se cargo.
+ */
+const seccionesDeReceta = () => SECCIONES.filter((s) => !s.dentroDe);
 
 const subSeccionesDe = (seccion, receta) =>
   SECCIONES.filter((s) => s.dentroDe === seccion?.id && esDeLaReceta(s, receta));
@@ -192,8 +203,8 @@ const claseColumna = (seccion, indice, total) =>
 // Texto plano del titulo, con el detalle entre parentesis si lo tiene.
 const tituloCompleto = (seccion, receta) =>
   seccion.detalle
-    ? `${tituloDeSeccion(seccion, receta)} (${seccion.detalle(receta)})`
-    : tituloDeSeccion(seccion, receta);
+    ? `${tituloDeSeccion(seccion)} (${seccion.detalle(receta)})`
+    : tituloDeSeccion(seccion);
 
 const FORM_INICIAL = {
   seccion: SECCION_POR_DEFECTO,
@@ -255,7 +266,7 @@ const RecetaDetalle = () => {
     };
   }, [recetas, slugActual]);
 
-  const seccionesVisibles = useMemo(() => seccionesDeReceta(receta), [receta]);
+  const seccionesVisibles = useMemo(() => seccionesDeReceta(), []);
 
   // Un producto puede agrupar variedades (las tabletas): en ese caso al abrirlo
   // se ven esas tarjetas y no las secciones. Y una variedad vuelve a su
@@ -434,8 +445,36 @@ const RecetaDetalle = () => {
     if (name === "cantidad" && errorCantidad) setErrorCantidad("");
   };
 
+  // Lo que la receta declara que no lleva. Vive en la receta, no en el codigo:
+  // dos recetas de la misma categoria pueden diferir.
+  const sinUso = receta.sinSecciones || [];
+
+  const declaraSinUso = (seccion) => sinUso.includes(seccion.id);
+
+  // Una tabla vacia no dice lo mismo si esta declarada sin uso: ahi no falta
+  // nada. Se dice en el lugar donde se lo va a leer, que es el cuerpo.
+  const textoVacioDe = (seccion) =>
+    declaraSinUso(seccion) ? seccion.etiquetaSinUso : seccion.vacio;
+
+  /**
+   * Guarda que esta seccion no va en esta receta.
+   *
+   * Es un guardado parcial: se manda solo esta lista, asi que no toca los
+   * ingredientes ni la mano de obra.
+   */
+  const cambiarUso = (seccion, usa) => {
+    const proxima = usa
+      ? sinUso.filter((id) => id !== seccion.id)
+      : [...new Set([...sinUso, seccion.id])];
+
+    if (proxima.length === sinUso.length && usa) return;
+    guardarReceta({ id: receta.id, slug: receta.slug, sinSecciones: proxima });
+  };
+
   const handleAbrirNuevo = (seccion) => {
     const s = seccion || seccionActiva || SECCIONES[0];
+    // Cargar algo aca es decir que la seccion si va: se vuelve atras sola.
+    if (declaraSinUso(s)) cambiarUso(s, true);
     setForm({ ...FORM_INICIAL, seccion: s.id, unidad: s.unidadPorDefecto });
     setItemEditando(null);
     setErrorIngrediente("");
@@ -622,31 +661,6 @@ const RecetaDetalle = () => {
     guardarReceta({ ...receta, gramos });
   };
 
-  // --- El rinde de la receta ---------------------------------------------
-  // Cuantas unidades salen de una tanda de masa. Se carga al crear la receta
-  // desde el alta de Productos, pero si se puso mal hay que poder corregirlo:
-  // de este numero sale el costo de cada unidad.
-  const rindeGuardado = Number(receta.rinde) || 0;
-  const [rindeBorrador, setRindeBorrador] = useState("");
-
-  // Se escribe sin guardar (guarda al salir del campo), asi que el borrador
-  // solo se rearma cuando cambia el numero guardado: al abrir otra receta, al
-  // llegar los datos del servidor, o despues de guardar este mismo campo.
-  useEffect(() => {
-    setRindeBorrador(rindeGuardado ? String(rindeGuardado) : "");
-  }, [idReceta, rindeGuardado]);
-
-  const guardarRinde = () => {
-    const cantidad = Math.max(0, Math.round(Number(rindeBorrador) || 0));
-    // Sin cambio no se guarda: cada guardado manda la receta entera y queda
-    // anotado en el historial de precios.
-    if (cantidad === rindeGuardado) {
-      setRindeBorrador(cantidad ? String(cantidad) : "");
-      return;
-    }
-    guardarReceta({ ...receta, rinde: cantidad });
-  };
-
   // --- Componentes de una fila -------------------------------------------
   // Una fila se puede desglosar en varios componentes. La cantidad que muestra
   // la tabla es la suma de ellos, asi que deja de escribirse a mano.
@@ -769,7 +783,7 @@ const RecetaDetalle = () => {
               {filasSeccion.length === 0 ? (
                 <tr>
                   <td colSpan="3" className="text-center py-4 text-secondary">
-                    {seccion.vacio}
+                    {textoVacioDe(seccion)}
                   </td>
                 </tr>
               ) : (
@@ -843,6 +857,28 @@ const RecetaDetalle = () => {
                 <BuscadorFiltro valor={busqueda} alCambiar={setBusqueda} placeholder="Buscar..." />
               </div>
             )}
+            {/* Declarar que no va nada aca. Se vuelve atras con el boton de al
+                lado: cargar una linea es decir que si va. */}
+            {seccion.etiquetaSinUso &&
+              (declaraSinUso(seccion) ? (
+                <span
+                  className="mush-badge mush-badge-alerta d-inline-flex text-nowrap"
+                  title="Se vuelve atras cargando una linea"
+                >
+                  <i className="bi bi-slash-circle"></i>
+                  {seccion.etiquetaSinUso}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className="btn-mush-ghost text-nowrap"
+                  style={{ fontSize: "0.78rem" }}
+                  onClick={() => cambiarUso(seccion, false)}
+                  title="En Costos deja de figurar como un dato que falta"
+                >
+                  {seccion.etiquetaSinUso}
+                </button>
+              ))}
             <button
               type="button"
               className={`${claseBoton} text-nowrap`}
@@ -873,7 +909,7 @@ const RecetaDetalle = () => {
               {filasSeccion.length === 0 ? (
                 <tr>
                   <td colSpan="5" className="text-center py-4 text-secondary">
-                    {busqueda ? "Sin resultados para la busqueda." : seccion.vacio}
+                    {busqueda ? "Sin resultados para la busqueda." : textoVacioDe(seccion)}
                   </td>
                 </tr>
               ) : (
@@ -1017,8 +1053,18 @@ const RecetaDetalle = () => {
                 >
                   <span className={ESCALAS[s.escala].emoji}>{s.emoji}</span>
                   <strong className="text-white fw-bold w-100 lh-sm" style={{ fontSize: ESCALAS[s.escala].texto }}>
-                    {tituloDeSeccion(s, receta)}
+                    {tituloDeSeccion(s)}
                     {s.detalle && <span className="fw-normal"> ({s.detalle(receta)})</span>}
+                    {/* La tarjeta dice que esta declarada sin uso: si no, se
+                        entra a una tabla vacia sin saber si falta cargarla. */}
+                    {declaraSinUso(s) && (
+                      <span
+                        className="d-block fw-normal text-secondary mt-1"
+                        style={{ fontSize: "0.68rem" }}
+                      >
+                        no utiliza
+                      </span>
+                    )}
                   </strong>
                 </Link>
               </div>
@@ -1174,7 +1220,7 @@ const RecetaDetalle = () => {
               <i className="bi bi-arrow-left"></i>
             </Link>
             <h2 className="mush-display text-white mb-0">
-              {tituloDeSeccion(seccionActiva, receta)}
+              {tituloDeSeccion(seccionActiva)}
             </h2>
             <span className="mush-display text-secondary fs-2">-</span>
             <span className="mush-display text-dulce fs-2">{receta.nombre}</span>
@@ -1254,54 +1300,17 @@ const RecetaDetalle = () => {
             >
               <i className="bi bi-arrow-left"></i>
             </Link>
-            <h2 className="mush-display text-white mb-0 d-inline-flex align-items-center flex-wrap gap-2">
-              {tituloDeSeccion(seccionActiva, receta)}
-              {/* La seccion de la masa no muestra el rinde: lo pregunta. Es el
-                  unico lugar donde se puede corregir despues del alta. */}
-              {seccionActiva.editaRinde ? (
-                <span className="d-inline-flex align-items-center gap-2">
-                  <span
-                    className="text-secondary fw-normal text-lowercase"
-                    style={{ fontSize: "1rem" }}
-                  >
-                    una tanda rinde
-                  </span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    aria-label={`Una tanda rinde, en ${unidadPlural(receta)}`}
-                    className="form-control form-control-sm mush-input mush-dato mush-sin-spinner py-1 px-2 text-center fw-bold"
-                    style={{ fontSize: "0.9rem", width: "90px" }}
-                    placeholder="0"
-                    value={rindeBorrador}
-                    onChange={(e) => setRindeBorrador(e.target.value)}
-                    onBlur={guardarRinde}
-                    autoComplete="off"
-                  />
-                  <span
-                    className="text-secondary fw-normal text-lowercase"
-                    style={{ fontSize: "1rem" }}
-                  >
-                    {unidadPlural(receta)}
-                  </span>
-                  {/* Sin el rinde los ingredientes de la tanda no se pueden
-                      repartir, asi que el costo por unidad no existe. */}
-                  {!rindeGuardado && (
-                    <span className="text-danger fw-normal" style={{ fontSize: "0.8rem" }}>
-                      sin esto no hay costo por unidad
-                    </span>
-                  )}
+            <h2 className="mush-display text-white mb-0">
+              {tituloDeSeccion(seccionActiva)}
+              {/* Cuanto rinde una tanda se carga en el alta del producto, que es
+                  donde se decide que se vende. Aca es un dato, no un campo. */}
+              {seccionActiva.detalle && (
+                <span
+                  className="text-secondary fw-normal ms-2 text-lowercase"
+                  style={{ fontSize: "1rem" }}
+                >
+                  ({seccionActiva.detalle(receta)})
                 </span>
-              ) : (
-                seccionActiva.detalle && (
-                  <span
-                    className="text-secondary fw-normal text-lowercase"
-                    style={{ fontSize: "1rem" }}
-                  >
-                    ({seccionActiva.detalle(receta)})
-                  </span>
-                )
               )}
             </h2>
             <span className="mush-display text-secondary fs-2">-</span>

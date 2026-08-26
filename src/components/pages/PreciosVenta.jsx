@@ -246,10 +246,10 @@ const PreciosVenta = () => {
   /**
    * De donde sale el costo de la fila, escrito como se lee.
    *
-   * Una caja armada es la suma de lo que lleva adentro mas su caja de carton;
-   * una caja comun es el costo de la unidad por lo que entra; y la que lleva una
-   * de cada variedad, todos los ingredientes juntos con el packaging y la mano
-   * de obra una sola vez.
+   * Un subproducto es la suma de los productos que lleva adentro mas su caja de
+   * carton, sean varios (un surtido) o uno solo repetido (una caja de 6). El que
+   * agrupa variedades, en cambio, suma todos los ingredientes juntos con el
+   * packaging y la mano de obra una sola vez.
    *
    * Los importes van con centavos: redondeados a pesos, las partes no suman el
    * total y la cuenta parece mal hecha.
@@ -369,7 +369,7 @@ const PreciosVenta = () => {
   );
 
   return (
-    <div className="container py-4">
+    <div className="container py-4" style={{ paddingBottom: "75px" }}>
       <div
         className="mx-auto d-flex flex-column"
         style={{
@@ -669,7 +669,7 @@ const PreciosVenta = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {historialDeReceta(filaModal.receta).length === 0 ? (
+                      {historialDeReceta({ precios: filaModal.precios }).length === 0 ? (
                         <tr>
                           <td
                             colSpan={COLUMNAS_HISTORIAL.length + 1}
@@ -679,7 +679,7 @@ const PreciosVenta = () => {
                           </td>
                         </tr>
                       ) : (
-                        historialDeReceta(filaModal.receta).map((dia) => (
+                        historialDeReceta({ precios: filaModal.precios }).map((dia) => (
                           <tr key={dia.fecha} style={{ height: ALTO_FILA }}>
                             <td className="text-center">
                               <span

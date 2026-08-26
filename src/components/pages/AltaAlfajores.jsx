@@ -1,45 +1,75 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import BotonExcel from "../shared/BotonExcel.jsx";
 import { useMush } from "../../context/MushContext";
+import { PRODUCTO, SUBPRODUCTO, esSubproducto, tipoDe } from "../../data/productos";
+import { unidadSingular } from "../../utils/costos";
 import BuscadorFiltro from "../shared/BuscadorFiltro.jsx";
 import Swal from "sweetalert2";
 
-const CATEGORIAS_DISPONIBLES = [
-  "Alfajor",
-  "Mini",
-  "Mendiant",
-  "Tableta",
-  "Caja",
-  "Lata",
-  "Pack",
-];
+/**
+ * El encabezado bajo el que van las cajas que llevan mas de un producto.
+ *
+ * No es un producto ni existe en los datos: un producto es lo que se hace con
+ * una receta, y una mezcla no se hace, se arma con varios. Es solo el titulo
+ * que las junta, para que no parezcan colgando del ultimo producto de la lista.
+ */
+const GRUPO_MEZCLA = "Alfajores combinados";
+
+// El valor que toma "de que producto es" cuando la respuesta es que no es de
+// ninguno. No se guarda: lo que se guarda es lo que la caja lleva adentro.
+const MEZCLA = "__mezcla__";
+
+/**
+ * La categoria de un producto contesta una sola pregunta: en que se cuenta lo
+ * que rinde una tanda. De eso sale si la mano de obra se paga por hora o
+ * repartiendo el sueldo del mes, asi que elegir mal cambia el costo.
+ *
+ * Ya no esta "Mendiant": era el nombre de un producto, no de una familia, y
+ * hacia lo mismo que "Lata". No la usaba ninguno.
+ */
+const CATEGORIAS_PRODUCTO = ["Alfajor", "Mini", "Tableta", "Lata", "Doy Pack"];
+
+/**
+ * La de un subproducto es solo una etiqueta: no toca ningun numero, porque un
+ * subproducto no tiene receta ni rinde. Sirve para reconocerlo en las listas y
+ * para buscarlo.
+ */
+const CATEGORIAS_SUBPRODUCTO = ["Caja", "Pack"];
+
+const categoriasDe = (tipo) =>
+  tipo === SUBPRODUCTO ? CATEGORIAS_SUBPRODUCTO : CATEGORIAS_PRODUCTO;
 
 const FORM_INICIAL = {
   id: "",
+  // "producto" o "subproducto".
+  tipo: PRODUCTO,
   nombre: "",
   categoria: "Alfajor",
   observaciones: "",
   emoji: "",
-  // De que receta sale el costo.
+  // Solo el producto: su receta. No se elige -se crea con el-, pero al editar
+  // uno que ya existe hay que conservar la que tiene.
   receta: "",
-  // Para cuantas unidades es una tanda de masa. Solo se pregunta cuando la
-  // receta se crea aca.
+  // La que tenia al abrirse, para no perderla si se pasa a subproducto y se
+  // vuelve.
+  recetaOriginal: "",
+  // Para cuantas unidades es una tanda de masa. Vive en la receta, pero se
+  // carga y se corrige aca.
   rinde: "",
-  // "unidad" o "caja".
-  presentacion: "unidad",
-  unidades: "",
+  // En que se cuenta ese rinde. De una receta que ya existe sale de ella, no de
+  // la categoria: cambiar la categoria no le mueve la unidad a una receta
+  // cargada.
+  unidadRindeActual: "",
+  // Solo el subproducto: de que producto es (un producto, o MEZCLA), que lleva
+  // adentro y en que caja de carton va. "padre" es del formulario nada mas: lo
+  // que se guarda es "lleva", y de ahi se vuelve a deducir.
+  padre: "",
+  lleva: [],
   carton: "",
-  // Las cajas que llevan productos distintos declaran su contenido.
-  armada: false,
-  composicion: [],
   activo: true,
 };
 
-const COMPONENTE_VACIO = { receta: "", cantidad: "" };
-
-// La opcion de "Se costea con" que no elige una receta existente sino que pide
-// una nueva, en blanco, para este producto.
-const RECETA_NUEVA = "__nueva__";
+const LINEA_VACIA = { producto: "", cantidad: "" };
 
 /**
  * En que se cuenta el rinde de una receta, segun la categoria del producto.
@@ -48,14 +78,21 @@ const RECETA_NUEVA = "__nueva__";
  * mendiant una lata. No es un detalle de texto: la mano de obra de lo que no se
  * cuenta en alfajores se paga por hora y no por sueldo mensual.
  */
-const UNIDAD_DE_RINDE = { Tableta: "tableta", Lata: "lata", Mendiant: "lata" };
+const UNIDAD_DE_RINDE = { Tableta: "tableta", Lata: "lata" };
 
 const unidadDeRinde = (categoria) => UNIDAD_DE_RINDE[categoria] || "alfajores";
 
-const unidadDeRindeEnPlural = (categoria) => {
-  const unidad = unidadDeRinde(categoria);
-  return unidad.endsWith("s") ? unidad : `${unidad}s`;
-};
+const enPlural = (unidad) => (unidad.endsWith("s") ? unidad : `${unidad}s`);
+
+const unidadDeRindeEnPlural = (categoria) => enPlural(unidadDeRinde(categoria));
+
+// Un texto sin mayusculas ni tildes, para buscar: escribir "clasico" tiene que
+// encontrar "Alfajor Clásico Semiamargo".
+const sinTildes = (txt) =>
+  String(txt || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
 
 // Un nombre sin mayusculas, tildes, signos ni plurales: sirve para comparar
 // "Nuez" con "Nueces" y "Clasico" con "Clasico".
@@ -85,65 +122,133 @@ const AltaAlfajores = () => {
   const { alfajores, recetas, packaging, guardarAlfajor, eliminarAlfajor, guardarReceta } =
     useMush();
 
-  // Lo que se puede elegir en el alta: las recetas cargadas y las cajas de
-  // carton del packaging.
-  const recetasOrdenadas = [...(recetas || [])].sort((a, b) =>
-    (a.nombre || "").localeCompare(b.nombre || "", "es", { sensitivity: "base" })
-  );
-
+  // Lo unico que se elige de otra lista: la caja de carton del packaging.
   const cartones = (packaging || []).filter((item) => /caja/i.test(item.nombre || ""));
 
-  const nombreDeReceta = (slug) =>
-    (recetas || []).find((r) => r.slug === slug)?.nombre || slug;
+  const recetaDe = (slug) => (recetas || []).find((r) => r.slug === slug || r.id === slug);
+
+  const nombreDeReceta = (slug) => recetaDe(slug)?.nombre || slug;
+
+  /**
+   * En que se vende un producto: casi siempre por alfajor, pero el mendiant se
+   * vende por lata y las tabletas por tableta. Sale de la unidad del rinde de
+   * su receta, que es la misma con la que se lo costea.
+   */
+  const seVendePor = (item) => `Por ${unidadSingular(recetaDe(item.receta))}`;
 
   const [form, setForm] = useState(FORM_INICIAL);
   const [modoEdicion, setModoEdicion] = useState(false);
   const [mostrarModal, setMostrarModal] = useState(false);
   const [busqueda, setBusqueda] = useState("");
   const [errorNombre, setErrorNombre] = useState("");
-  // Mientras la receta no se haya tocado a mano, se sigue proponiendo sola al
-  // escribir el nombre.
-  const [recetaAMano, setRecetaAMano] = useState(false);
-
-  // Una fila sin producto elegido esta a medio cargar: no cuenta.
-  const componentesValidos = (lista) =>
-    (lista || []).filter((c) => c.receta && Number(c.cantidad) > 0);
-
-  const cambiarComponente = (indice, campo, valor) =>
-    setForm((prev) => ({
-      ...prev,
-      composicion: prev.composicion.map((c, i) => (i === indice ? { ...c, [campo]: valor } : c)),
-    }));
-
-  const agregarComponente = () =>
-    setForm((prev) => ({ ...prev, composicion: [...prev.composicion, { ...COMPONENTE_VACIO }] }));
-
-  const quitarComponente = (indice) =>
-    setForm((prev) => ({
-      ...prev,
-      composicion: prev.composicion.filter((_, i) => i !== indice),
-    }));
+  // Lo mismo con el nombre de un subproducto, que se arma solo con el producto
+  // que lleva y cuantos: se deja de armar en cuanto se escribe encima.
+  const [nombreAMano, setNombreAMano] = useState(false);
 
   /**
-   * La receta que corresponde a un nombre de producto.
+   * La fila que se acaba de guardar: se la lleva a la vista y se la pinta un
+   * momento.
    *
-   * "Clasico Semiamargo (CAJA x 6)" sale de la receta "Clasico Semiamargo": se
-   * ignora lo que va entre parentesis y se busca la que mas se parece. Es una
-   * ayuda para no tener que elegirla a mano, no una regla: el campo queda a la
-   * vista y se puede cambiar.
+   * La lista tiene su propio scroll y esta agrupada por familia, asi que un
+   * producto nuevo no aparece al final sino en el medio, donde le toque: sin
+   * esto hay que salir a buscarlo a mano.
    */
-  const recetaQueSugiere = (nombre) => {
-    const limpio = normalizar(String(nombre).replace(/\([^)]*\)/g, ""));
-    if (limpio.length < 3) return "";
+  const [recienGuardado, setRecienGuardado] = useState("");
+  const filas = useRef({});
 
-    // Gana la de nombre mas largo que este contenida: asi "Mini Semi" no le
-    // gana a "Mini Semiamargo".
-    return (recetasOrdenadas
-      .map((receta) => ({ receta, clave: normalizar(receta.nombre || "") }))
-      .filter(({ clave }) => clave && (limpio.includes(clave) || clave.includes(limpio)))
-      .sort((a, b) => b.clave.length - a.clave.length)[0] || {}
-    ).receta?.slug || "";
+  useEffect(() => {
+    if (!recienGuardado) return;
+
+    // Espera al repintado, porque la fila todavia no existe cuando se guarda.
+    const id = requestAnimationFrame(() => {
+      filas.current[recienGuardado]?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+    const apagar = setTimeout(() => setRecienGuardado(""), 2600);
+
+    return () => {
+      cancelAnimationFrame(id);
+      clearTimeout(apagar);
+    };
+  }, [recienGuardado]);
+
+  // Un subproducto se arma con productos, asi que solo esos se pueden elegir:
+  // una caja de 6 no lleva otra caja de 6 adentro.
+  const productosBase = (alfajores || [])
+    .filter((item) => !esSubproducto(item) && item.activo !== false)
+    .sort((a, b) => (a.nombre || "").localeCompare(b.nombre || "", "es", { sensitivity: "base" }));
+
+  const nombreDeProducto = (id) =>
+    (alfajores || []).find((item) => item.id === id)?.nombre || "";
+
+  /**
+   * Las categorias que se pueden elegir.
+   *
+   * Si lo cargado tiene una que ya no esta en la lista -el Pack Sabores, que es
+   * un producto de categoria "Pack"- se agrega igual, para que abrirlo a
+   * editarlo no se la cambie sin querer.
+   */
+  const categoriasVisibles = (() => {
+    const validas = categoriasDe(form.tipo);
+    return !form.categoria || validas.includes(form.categoria)
+      ? validas
+      : [...validas, form.categoria];
+  })();
+
+  // Un subproducto de un producto lleva ese producto y nada mas: en vez de una
+  // lista alcanza con decir cuantos entran.
+  const esDeUnProducto = Boolean(form.padre) && form.padre !== MEZCLA;
+
+  // Una linea sin producto elegido esta a medio cargar: no cuenta.
+  const lineasValidas = (lista) =>
+    (lista || []).filter((c) => c.producto && Number(c.cantidad) > 0);
+
+  // Cuantas unidades tiene el subproducto: la suma de lo que lleva. No se
+  // escribe a mano, porque seria el mismo numero anotado dos veces.
+  const unidadesDe = (lista) =>
+    lineasValidas(lista).reduce((suma, c) => suma + Number(c.cantidad), 0);
+
+  const cambiarLinea = (indice, campo, valor) =>
+    setForm((prev) => {
+      const lleva = prev.lleva.map((c, i) => (i === indice ? { ...c, [campo]: valor } : c));
+      return { ...prev, lleva, nombre: nombreDeSubproducto(prev, lleva) };
+    });
+
+  const agregarLinea = () =>
+    setForm((prev) => ({ ...prev, lleva: [...prev.lleva, { ...LINEA_VACIA }] }));
+
+  const quitarLinea = (indice) =>
+    setForm((prev) => {
+      const lleva = prev.lleva.filter((_, i) => i !== indice);
+      return { ...prev, lleva, nombre: nombreDeSubproducto(prev, lleva) };
+    });
+
+  /**
+   * El nombre que le corresponde a un subproducto: "Clasico Semiamargo
+   * (CAJA x 6)". Sale del producto que lleva y de cuantos, asi que todos se
+   * llaman igual y no conviven "Clasico semiamargo (CAJA x 6)" con
+   * "Clasico Blanco (CAJA x 6)", con distinta mayuscula.
+   *
+   * Un surtido lleva varios productos y no hay nombre que se pueda deducir de
+   * ahi: devuelve vacio y manda lo que se escriba.
+   */
+  const nombrePropuesto = (lleva) => {
+    const lineas = lineasValidas(lleva);
+    if (lineas.length !== 1) return "";
+    return `${nombreDeProducto(lineas[0].producto)} (CAJA x ${Number(lineas[0].cantidad)})`;
   };
+
+  // Si el nombre se escribio a mano, se respeta.
+  const nombreDeSubproducto = (estado, lleva) =>
+    nombreAMano ? estado.nombre : nombrePropuesto(lleva) || estado.nombre;
+
+  /**
+   * Un producto que todavia no tiene receta: la va a crear al guardarse.
+   *
+   * Es el caso normal, porque un producto se hace con una receta y esa receta
+   * es la suya: no hay nada que elegir. Solo tiene una ya puesta el que se esta
+   * editando, y uno viejo al que nunca se le cargo (el Pack Sabores).
+   */
+  const necesitaReceta = form.tipo === PRODUCTO && !form.receta;
 
   /**
    * El slug de la receta nueva sale del nombre del producto. Si ya hay una
@@ -191,28 +296,52 @@ const AltaAlfajores = () => {
     const { name, value, type, checked } = e.target;
     setForm((prev) => {
       const proximo = { ...prev, [name]: type === "checkbox" ? checked : value };
-      // Al escribir el nombre se propone la receta, mientras no se haya elegido
-      // una a mano. Si el nombre no se parece a ninguna, lo que se propone es
-      // crear una: un producto que no existia todavia trae su propia receta.
-      if (name === "nombre" && !recetaAMano) {
-        proximo.receta = recetaQueSugiere(value) || (value.trim() ? RECETA_NUEVA : "");
+
+      // Al elegir de que producto es, lo que lleva se arma solo: si es de uno,
+      // una linea con ese producto; si es una mezcla, la lista para cargarla.
+      if (name === "padre") {
+        if (!value) {
+          proximo.lleva = [];
+        } else if (value === MEZCLA) {
+          // Una mezcla lleva mas de uno: arranca con dos lineas.
+          proximo.lleva =
+            prev.lleva.length > 1 ? prev.lleva : [{ ...LINEA_VACIA }, { ...LINEA_VACIA }];
+        } else {
+          proximo.lleva = [{ producto: value, cantidad: prev.lleva[0]?.cantidad || "" }];
+        }
+        proximo.nombre = nombreDeSubproducto(prev, proximo.lleva);
       }
-      // Una caja no se hace aparte: sale de la receta de lo que lleva adentro.
-      // Si lo propuesto era crear una, se pide elegirla.
-      if (
-        name === "presentacion" &&
-        value === "caja" &&
-        !recetaAMano &&
-        prev.receta === RECETA_NUEVA
-      ) {
-        proximo.receta = "";
+
+      // Al cambiar de tipo se limpia lo que era del otro: son dos altas
+      // distintas, y arrastrar los campos de la anterior deja datos sueltos.
+      if (name === "tipo" && value !== prev.tipo) {
+        if (value === SUBPRODUCTO) {
+          proximo.receta = "";
+          proximo.rinde = "";
+          // Lo que lleva se arma al elegir de que producto es.
+          proximo.padre = "";
+          proximo.lleva = [];
+        } else {
+          proximo.padre = "";
+          proximo.lleva = [];
+          proximo.carton = "";
+          // Al volver a producto se recupera la receta que ya tenia: ir y venir
+          // entre los dos tipos no le crea una segunda.
+          proximo.receta = prev.recetaOriginal;
+        }
+
+        // Las categorias de un tipo no valen para el otro: si la que estaba
+        // elegida no existe en el nuevo, se toma la primera.
+        const validas = categoriasDe(value);
+        if (!validas.includes(proximo.categoria)) proximo.categoria = validas[0];
       }
+
       return proximo;
     });
-    if (name === "receta") {
-      setRecetaAMano(true);
-    }
+
+    // El nombre escrito a mano manda sobre el propuesto.
     if (name === "nombre") {
+      setNombreAMano(Boolean(value.trim()));
       setErrorNombre("");
     }
   };
@@ -221,34 +350,98 @@ const AltaAlfajores = () => {
     setForm(FORM_INICIAL);
     setModoEdicion(false);
     setErrorNombre("");
-    setRecetaAMano(false);
+    setNombreAMano(false);
     setMostrarModal(true);
   };
 
+  /**
+   * Lo que lleva un subproducto, para el formulario.
+   *
+   * Las cajas cargadas antes de los tipos lo decian de dos maneras distintas:
+   * un surtido, con su composicion anotada por receta; y una caja comun, sin
+   * composicion, solo con su receta y cuantas unidades entraban. Las dos se
+   * leen aca y salen iguales: una lista de productos con su cantidad.
+   */
+  const llevaDe = (item) => {
+    const productoDeReceta = (receta) =>
+      (alfajores || []).find((p) => !esSubproducto(p) && p.receta === receta)?.id || "";
+
+    if ((item.composicion || []).length > 0) {
+      return item.composicion.map((c) => ({
+        producto: c.producto || productoDeReceta(c.receta),
+        cantidad: c.cantidad !== undefined ? String(c.cantidad) : "",
+      }));
+    }
+
+    if (item.receta && Number(item.unidades) > 0) {
+      return [{ producto: productoDeReceta(item.receta), cantidad: String(item.unidades) }];
+    }
+
+    return [{ ...LINEA_VACIA }];
+  };
+
   const handleEditar = (item) => {
+    const tipo = tipoDe(item);
+    // El rinde es de la receta, pero se corrige desde aca sin tener que ir
+    // hasta la tarjeta Masa.
+    const suReceta =
+      tipo === PRODUCTO && item.receta
+        ? (recetas || []).find((r) => r.slug === item.receta || r.id === item.receta)
+        : null;
+    const lleva = tipo === SUBPRODUCTO ? llevaDe(item) : [];
+
+    // De que producto es no se guarda: se vuelve a deducir de lo que lleva.
+    // Un solo producto adentro, por repetido que este, es de ese producto;
+    // varios distintos son una mezcla; ninguno es una caja a medio cargar.
+    const cargadas = lineasValidas(lleva);
+    const distintos = [...new Set(cargadas.map((l) => l.producto))];
+    const padre =
+      tipo !== SUBPRODUCTO || distintos.length === 0
+        ? ""
+        : distintos.length === 1
+          ? distintos[0]
+          : MEZCLA;
+
+    // De un solo producto se muestra una linea sola, asi que si venian varias
+    // del mismo se suman: colapsarlas quedandose con la primera perderia el
+    // resto al guardar.
+    const llevaDelFormulario =
+      padre && padre !== MEZCLA
+        ? [
+            {
+              producto: padre,
+              cantidad: String(cargadas.reduce((suma, l) => suma + Number(l.cantidad), 0)),
+            },
+          ]
+        : lleva;
+
+    // El nombre de un subproducto lo propone la pantalla: si se le cambia la
+    // cantidad, acompana, en vez de quedar diciendo "(CAJA x 6)" cuando ahora
+    // entran 8. Deja de proponerlo en cuanto se escriba encima.
+    //
+    // Una mezcla no se toca: como lleva varios productos no hay nombre que
+    // deducir, y nombrePropuesto devuelve vacio para ella.
+    setNombreAMano(tipo === PRODUCTO);
+
     setForm({
       ...FORM_INICIAL,
       id: item.id,
+      tipo,
       nombre: item.nombre || "",
       categoria: item.categoria || "Alfajor",
       observaciones: item.observaciones || "",
       emoji: item.emoji || "",
-      receta: item.receta || "",
-      presentacion: item.presentacion || "unidad",
-      unidades: item.unidades ? String(item.unidades) : "",
+      receta: tipo === PRODUCTO ? item.receta || "" : "",
+      recetaOriginal: tipo === PRODUCTO ? item.receta || "" : "",
+      rinde: Number(suReceta?.rinde) > 0 ? String(suReceta.rinde) : "",
+      unidadRindeActual: suReceta?.unidadRinde || "",
+      padre,
+      lleva: llevaDelFormulario,
       carton: item.carton || "",
-      armada: (item.composicion || []).length > 0,
-      composicion: (item.composicion || []).map((c) => ({
-        receta: c.receta || "",
-        cantidad: c.cantidad !== undefined ? String(c.cantidad) : "",
-      })),
       activo: item.activo !== false,
     });
     setModoEdicion(true);
     setErrorNombre("");
-    // Un producto que ya existe tiene su receta elegida: renombrarlo no se la
-    // cambia.
-    setRecetaAMano(true);
     setMostrarModal(true);
   };
 
@@ -256,13 +449,29 @@ const AltaAlfajores = () => {
     setForm(FORM_INICIAL);
     setModoEdicion(false);
     setErrorNombre("");
-    setRecetaAMano(false);
+    setNombreAMano(false);
     setMostrarModal(false);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorNombre("");
+
+    const esSub = form.tipo === SUBPRODUCTO;
+    const lineas = lineasValidas(form.lleva);
+
+    // Un subproducto sin contenido no tiene costo ni nombre: se pregunta antes
+    // que nada, porque el nombre sale justamente de lo que lleva.
+    if (esSub && lineas.length === 0) {
+      setErrorNombre(
+        form.padre === MEZCLA
+          ? "Falta decir que lleva la mezcla, y cuantos de cada uno."
+          : form.padre
+            ? "Falta decir cuantos entran por caja."
+            : "Falta decir de que producto es."
+      );
+      return;
+    }
 
     const nombreLimpio = (form.nombre || "").trim();
     if (!nombreLimpio) {
@@ -284,31 +493,33 @@ const AltaAlfajores = () => {
       return;
     }
 
-    if (!form.receta) {
-      setErrorNombre("Falta elegir de que receta sale el costo.");
-      return;
-    }
-
     // Sin el rinde no se puede costear nada: los ingredientes de la masa se
-    // anotan por tanda y se dividen por este numero.
-    if (form.receta === RECETA_NUEVA && !(Number(form.rinde) > 0)) {
+    // anotan por tanda y se dividen por este numero. Vale para cualquier
+    // producto, no solo para el que estrena receta: es el unico lugar donde se
+    // carga, asi que si no se pide aca no se pide en ningun lado.
+    if (!esSub && !(Number(form.rinde) > 0)) {
       setErrorNombre(
         `Falta decir para cuantos ${unidadDeRindeEnPlural(form.categoria)} es la masa.`
       );
       return;
     }
 
-    const esCaja = form.presentacion === "caja";
-    const componentes = componentesValidos(form.composicion);
+    // La caja de carton no es obligatoria -hay cosas que se venden sin ella-,
+    // pero olvidarsela es facil y el costo sale mal sin ruido: la caja es lo
+    // unico que un subproducto suma por su cuenta. Se pregunta, no se impide.
+    if (esSub && !form.carton) {
+      const respuesta = await Swal.fire({
+        ...swalConfig,
+        title: "¿Sin caja de cartón?",
+        text: `"${nombreLimpio}" no tiene ninguna elegida, así que su costo va a ser solamente el de lo que lleva adentro.`,
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonText: "Guardar así",
+        cancelButtonText: "Volver y elegirla",
+        reverseButtons: true,
+      });
 
-    if (esCaja && !form.armada && !(Number(form.unidades) > 0)) {
-      setErrorNombre("Una caja necesita cuantas unidades entran.");
-      return;
-    }
-
-    if (form.armada && componentes.length === 0) {
-      setErrorNombre("Una caja armada necesita al menos un producto adentro.");
-      return;
+      if (!respuesta.isConfirmed) return;
     }
 
     let idFinal = form.id;
@@ -326,10 +537,11 @@ const AltaAlfajores = () => {
 
     const itemPrevio = alfajores.find((a) => a.id === form.id) || {};
 
-    // Un producto que no sale de ninguna receta cargada trae la suya, vacia:
-    // queda su tarjeta en Recetas y en Costos para ir a llenarla.
+    // Un producto trae su receta, vacia: queda su tarjeta en Recetas y en
+    // Costos para ir a llenarla. Un subproducto no crea recetas: no se hace,
+    // se arma.
     const recetaCreada =
-      form.receta === RECETA_NUEVA
+      necesitaReceta
         ? recetaEnBlanco(
             slugLibre(nombreLimpio),
             nombreLimpio,
@@ -338,7 +550,13 @@ const AltaAlfajores = () => {
           )
         : null;
 
-    if (recetaCreada) guardarReceta(recetaCreada);
+    // Si la receta ya existia, se le va a mandar solo el rinde: el guardado es
+    // parcial y no toca sus ingredientes ni su mano de obra.
+    const rindeNuevo = Math.max(0, Math.round(Number(form.rinde) || 0));
+    const recetaPrevia =
+      !esSub && !recetaCreada && form.receta
+        ? (recetas || []).find((r) => r.slug === form.receta || r.id === form.receta)
+        : null;
 
     const productoAGuardar = {
       ...itemPrevio,
@@ -347,33 +565,42 @@ const AltaAlfajores = () => {
       categoria: form.categoria || "Alfajor",
       observaciones: form.observaciones ? form.observaciones.trim() : "",
       emoji: (form.emoji || "").trim(),
-      receta: recetaCreada ? recetaCreada.slug : form.receta,
-      presentacion: form.presentacion,
-      // Una caja armada cuenta lo que lleva adentro; el total de unidades sale
-      // de sumar esas cantidades.
-      unidades: esCaja
-        ? form.armada
-          ? componentes.reduce((suma, c) => suma + Number(c.cantidad), 0)
-          : Number(form.unidades) || 0
-        : 0,
-      carton: esCaja ? form.carton : "",
-      composicion: form.armada
-        ? componentes.map((c) => ({ receta: c.receta, cantidad: Number(c.cantidad) }))
+      tipo: form.tipo,
+      // Solo el producto se costea con una receta.
+      receta: esSub ? "" : recetaCreada ? recetaCreada.slug : form.receta,
+      // Se sigue escribiendo la presentacion, que es lo que leen Precios y
+      // Ventas para saber si la fila es una unidad o una caja.
+      presentacion: esSub ? "caja" : "unidad",
+      // Las unidades no se escriben a mano: son la suma de lo que lleva.
+      unidades: esSub ? unidadesDe(form.lleva) : 0,
+      carton: esSub ? form.carton : "",
+      composicion: esSub
+        ? lineas.map((c) => ({ producto: c.producto, cantidad: Number(c.cantidad) }))
         : [],
       activo: form.activo !== false,
     };
 
     try {
+      // El producto primero. Las recetas se tocan despues, y solo si esto
+      // salio bien: guardarlas antes dejaba una receta huerfana cada vez que
+      // el producto no se podia guardar, y desde la app no se pueden borrar.
       await guardarAlfajor(productoAGuardar);
+
+      if (recetaCreada) guardarReceta(recetaCreada);
+
+      if (recetaPrevia && rindeNuevo !== (Number(recetaPrevia.rinde) || 0)) {
+        guardarReceta({ id: recetaPrevia.id, slug: recetaPrevia.slug, rinde: rindeNuevo });
+      }
+
+      setRecienGuardado(productoAGuardar.id);
 
       Swal.fire({
         ...swalConfig,
-        title: "Producto guardado",
-        text: recetaCreada
-          ? `Se creo la receta "${recetaCreada.nombre}", vacia. Cargale los ingredientes en Recetas para que tenga costo.`
-          : undefined,
+        title: modoEdicion
+          ? `Se han guardado los cambios de ${nombreLimpio}`
+          : `Se ha creado el producto ${nombreLimpio}`,
         icon: "success",
-        timer: recetaCreada ? 3200 : 1400,
+        timer: 1600,
         showConfirmButton: false,
       });
 
@@ -383,6 +610,14 @@ const AltaAlfajores = () => {
       setErrorNombre(mensaje);
     }
   };
+
+  const verObservacion = (item) =>
+    Swal.fire({
+      ...swalConfig,
+      title: item.nombre,
+      text: item.observaciones,
+      confirmButtonText: "Cerrar",
+    });
 
   const handleEliminar = (item) => {
     Swal.fire({
@@ -398,31 +633,123 @@ const AltaAlfajores = () => {
         cancelButton: "btn btn-outline-secondary px-3 py-1 rounded-3 text-dark",
       },
     }).then((result) => {
-      if (result.isConfirmed) {
-        eliminarAlfajor(item.id);
-        if (form.id === item.id) {
-          handleCerrarModal();
-        }
+      if (!result.isConfirmed) return;
+
+      eliminarAlfajor(item.id);
+      if (form.id === item.id) {
+        handleCerrarModal();
       }
+
+      // La fila desaparece de la lista, pero el aviso confirma que se borro lo
+      // que se queria borrar y no la de al lado.
+      Swal.fire({
+        ...swalConfig,
+        title: esSubproducto(item)
+          ? "Se ha eliminado el subproducto"
+          : "Se ha eliminado el producto",
+        icon: "success",
+        timer: 1600,
+        showConfirmButton: false,
+      });
     });
   };
 
-  const productosFiltrados = (alfajores || [])
-    .filter((item) => {
-      const texto = busqueda.toLowerCase();
-      const nombre = (item.nombre || "").toLowerCase();
-      const cat = (item.categoria || "").toLowerCase();
-      const obs = (item.observaciones || "").toLowerCase();
-      return nombre.includes(texto) || cat.includes(texto) || obs.includes(texto);
-    })
-    .sort((a, b) =>
-      (a.nombre || "").localeCompare(b.nombre || "", "es", { sensitivity: "base" })
+  const porNombre = (a, b) =>
+    (a.nombre || "").localeCompare(b.nombre || "", "es", { sensitivity: "base" });
+
+  /**
+   * Los productos van agrupados por familia y, adentro, alfabeticos: todos los
+   * alfajores juntos, despues los mini, y asi. El orden de las familias es el
+   * del desplegable de categoria; una que no este en la lista va al final.
+   *
+   * Ordenar solo por nombre los mezclaba: "Mendiant" caia entre los alfajores.
+   */
+  const porFamilia = (a, b) => {
+    const puesto = (item) => {
+      const i = CATEGORIAS_PRODUCTO.indexOf(item.categoria);
+      return i === -1 ? CATEGORIAS_PRODUCTO.length : i;
+    };
+    return puesto(a) - puesto(b) || porNombre(a, b);
+  };
+
+  /**
+   * De que producto cuelga un subproducto.
+   *
+   * De uno solo, y solo si lleva un unico producto repetido: una caja de 6
+   * clasicos es del clasico. Un surtido lleva varios y no cuelga de ninguno.
+   */
+  const padreDe = (sub) => {
+    const ids = [
+      ...new Set(
+        llevaDe(sub)
+          .filter((l) => l.producto && Number(l.cantidad) > 0)
+          .map((l) => l.producto)
+      ),
+    ];
+    return ids.length === 1 ? ids[0] : "";
+  };
+
+  /**
+   * Que lleva un subproducto, en una linea de texto: el producto cuando es uno
+   * solo, y cuantos son cuando es un surtido.
+   */
+  const contenidoDe = (sub) => {
+    const lineas = llevaDe(sub).filter((l) => l.producto && Number(l.cantidad) > 0);
+    if (lineas.length === 0) return "";
+    if (lineas.length === 1) return nombreDeProducto(lineas[0].producto);
+    return `${lineas.length} productos surtidos`;
+  };
+
+  /**
+   * Las filas de la tabla: cada producto y, debajo, los subproductos que lo
+   * llevan. Los surtidos no cuelgan de uno solo, asi que van juntos al final.
+   *
+   * Ordenado asi se ve de un vistazo en cuantas presentaciones se vende cada
+   * cosa, que es lo que la lista alfabetica escondia: "Clasico Blanco (CAJA x
+   * 6)" quedaba a diez filas de "Clasico Blanco".
+   */
+  const filasDeLaTabla = (() => {
+    const texto = sinTildes(busqueda);
+    const visibles = (alfajores || []).filter(
+      (item) =>
+        sinTildes(item.nombre).includes(texto) ||
+        sinTildes(item.categoria).includes(texto) ||
+        sinTildes(item.observaciones).includes(texto)
     );
+
+    const productos = visibles.filter((item) => !esSubproducto(item)).sort(porFamilia);
+    const subproductos = visibles.filter(esSubproducto);
+    const colgados = new Set();
+    const filas = [];
+
+    productos.forEach((producto) => {
+      filas.push({ item: producto, sangria: false });
+      subproductos
+        .filter((sub) => padreDe(sub) === producto.id)
+        .sort((a, b) => (Number(a.unidades) || 0) - (Number(b.unidades) || 0))
+        .forEach((sub) => {
+          colgados.add(sub.id);
+          filas.push({ item: sub, sangria: true });
+        });
+    });
+
+    // Las que llevan mas de un producto no cuelgan de ninguno: van al final,
+    // bajo su propio encabezado. Sin el parecerian subproductos del ultimo
+    // producto de la lista, que es de lo unico que estarian debajo.
+    const mezclas = subproductos.filter((sub) => !colgados.has(sub.id)).sort(porNombre);
+
+    if (mezclas.length > 0) {
+      filas.push({ separador: GRUPO_MEZCLA });
+      mezclas.forEach((sub) => filas.push({ item: sub, sangria: true }));
+    }
+
+    return filas;
+  })();
 
   return (
     <div className="container py-4">
       {/* Contenedor ensanchado y centrado */}
-      <div className="mx-auto" style={{ maxWidth: "920px", width: "100%", paddingBottom: "75px" }}>
+      <div className="mx-auto" style={{ maxWidth: "1240px", width: "100%", paddingBottom: "75px" }}>
         {/* Encabezado con Botón Nuevo Producto (sin signo +) */}
         <div className="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-3">
           <h2 className="mush-display text-white mb-0">Productos</h2>
@@ -445,15 +772,30 @@ const AltaAlfajores = () => {
               )}
               <BotonExcel
                 titulo="Productos"
-                columnas={["Producto", "Categoria", "Se vende", "Receta", "Observaciones"]}
+                columnas={[
+                  "Producto",
+                  "Tipo",
+                  "Categoria",
+                  "Se vende",
+                  "Se hace con",
+                  "Observaciones",
+                ]}
                 filas={() =>
-                  productosFiltrados.map((item) => [
-                    item.nombre,
-                    item.categoria,
-                    item.presentacion === "caja" ? `Caja x ${item.unidades}` : "Por unidad",
-                    item.receta ? nombreDeReceta(item.receta) : "",
-                    item.observaciones,
-                  ])
+                  filasDeLaTabla
+                    // El encabezado de las mezclas es de la pantalla, no un dato.
+                    .filter(({ item }) => item)
+                    .map(({ item }) => [
+                      item.nombre,
+                      esSubproducto(item) ? "Subproducto" : "Producto",
+                      item.categoria,
+                      esSubproducto(item) ? `Caja x ${item.unidades || 0}` : seVendePor(item),
+                      esSubproducto(item)
+                        ? contenidoDe(item)
+                        : item.receta
+                          ? nombreDeReceta(item.receta)
+                          : "",
+                      item.observaciones,
+                    ])
                 }
               />
               <button type="button" className="btn-mush text-nowrap" onClick={handleAbrirNuevo}>
@@ -463,32 +805,58 @@ const AltaAlfajores = () => {
           </div>
 
           <div className="table-responsive mush-scroll-tabla" style={{ maxHeight: "calc(100vh - 280px)" }}>
-            <table className="table mush-tabla align-middle mb-0 text-nowrap">
+            <table
+              className="table mush-tabla mush-tabla-titulo-fijo align-middle mb-0"
+              style={{ tableLayout: "fixed" }}
+            >
               <thead>
                 <tr>
-                  <th style={{ width: "26%" }}>Producto</th>
-                  <th style={{ width: "12%" }}>Categoría</th>
+                  <th style={{ width: "36%" }}>Producto</th>
+                  <th style={{ width: "11%" }}>Categoría</th>
                   <th style={{ width: "22%" }}>Se vende</th>
-                  <th style={{ width: "22%" }}>Observaciones</th>
-                  <th className="text-end" style={{ width: "18%" }}>Acciones</th>
+                  <th className="text-center" style={{ width: "9%" }}>Obs.</th>
+                  {/* Los dos botones no se parten ni se salen: necesitan su
+                      ancho, y "Se vende" puede bajar de renglon. */}
+                  <th className="text-end" style={{ width: "22%" }}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {productosFiltrados.length === 0 ? (
+                {filasDeLaTabla.length === 0 ? (
                   <tr>
                     <td colSpan="5" className="text-center py-4 text-secondary">
                       No hay productos cargados.
                     </td>
                   </tr>
                 ) : (
-                  productosFiltrados.map((item) => (
-                    <tr key={item.id}>
+                  filasDeLaTabla.map(({ item, sangria, separador }) =>
+                    separador ? (
+                      <tr key={separador}>
+                        <td
+                          colSpan="5"
+                          className="border-top border-secondary border-opacity-25 pt-3 pb-1"
+                        >
+                          <strong className="text-white" style={{ fontSize: "0.82rem" }}>
+                            {separador}
+                          </strong>
+                        </td>
+                      </tr>
+                    ) : (
+                    <tr
+                      key={item.id}
+                      ref={(el) => {
+                        filas.current[item.id] = el;
+                      }}
+                      className={item.id === recienGuardado ? "mush-fila-nueva" : undefined}
+                    >
                       <td>
+                        {/* Un subproducto va corrido a la derecha y colgando de
+                            su producto, que es la fila de arriba. */}
                         <strong
-                          className="text-white text-truncate d-block"
-                          style={{ fontSize: "0.82rem", maxWidth: "260px" }}
+                          className={`d-block ${sangria ? "text-secondary ps-3" : "text-white"}`}
+                          style={{ fontSize: "0.82rem", lineHeight: 1.25 }}
                           title={item.nombre}
                         >
+                          {sangria && <span className="me-1">↳</span>}
                           {item.nombre}
                         </strong>
                       </td>
@@ -500,20 +868,29 @@ const AltaAlfajores = () => {
                           {item.categoria || "Alfajor"}
                         </span>
                       </td>
-                      {/* De donde sale su costo y en que presentacion se vende */}
+                      {/* De donde sale su costo y en que presentacion se vende:
+                          un producto lo dice su receta, un subproducto lo que
+                          lleva adentro. */}
                       <td>
-                        <span
-                          className="text-secondary text-truncate d-block"
-                          style={{ fontSize: "0.8rem", maxWidth: "250px" }}
-                          title={item.receta ? nombreDeReceta(item.receta) : ""}
-                        >
-                          {item.receta ? (
-                            <>
-                              {item.presentacion === "caja" ? `Caja x ${item.unidades}` : "Por unidad"}
-                              <span className="ms-1" style={{ fontSize: "0.72rem" }}>
-                                de {nombreDeReceta(item.receta)}
+                        {/* Entero, sin recortar: es el dato por el que se mira
+                            esta columna. Si no entra en el ancho, baja de
+                            renglon. */}
+                        <span className="text-secondary d-block" style={{ fontSize: "0.8rem" }}>
+                          {esSubproducto(item) ? (
+                            contenidoDe(item) ? (
+                              <>
+                                Caja x {item.unidades || 0}
+                                <span className="ms-1" style={{ fontSize: "0.72rem" }}>
+                                  de {contenidoDe(item)}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-alerta">
+                                <i className="bi bi-exclamation-triangle-fill"></i> sin contenido
                               </span>
-                            </>
+                            )
+                          ) : item.receta ? (
+                            seVendePor(item)
                           ) : (
                             <span className="text-alerta">
                               <i className="bi bi-exclamation-triangle-fill"></i> sin receta
@@ -521,17 +898,27 @@ const AltaAlfajores = () => {
                           )}
                         </span>
                       </td>
-                      <td>
-                        <span
-                          className="text-secondary text-truncate d-block"
-                          style={{ fontSize: "0.8rem", maxWidth: "250px" }}
-                          title={item.observaciones}
-                        >
-                          {item.observaciones || "—"}
-                        </span>
+                      <td className="text-center">
+                        {/* La observacion puede ser larga y no vale una columna
+                            entera: se abre cuando se la quiere leer. */}
+                        {item.observaciones ? (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-secondary py-0 px-2 text-white"
+                            style={{ fontSize: "0.72rem", minHeight: "24px" }}
+                            onClick={() => verObservacion(item)}
+                            title="Ver la observación"
+                          >
+                            Ver
+                          </button>
+                        ) : (
+                          <span className="text-secondary" style={{ fontSize: "0.8rem" }}>
+                            —
+                          </span>
+                        )}
                       </td>
                       <td className="text-end">
-                        <div className="d-flex justify-content-end gap-1">
+                        <div className="d-flex justify-content-end gap-1 text-nowrap">
                           <button
                             type="button"
                             className="btn btn-sm btn-outline-secondary py-0 px-2 text-white d-inline-flex align-items-center gap-1"
@@ -571,7 +958,7 @@ const AltaAlfajores = () => {
         >
           <div
             className="modal-dialog modal-dialog-centered"
-            style={{ maxWidth: "460px" }}
+            style={{ maxWidth: "580px" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="modal-content mush-card p-3 p-sm-4 rounded-4 shadow-lg border border-secondary border-opacity-25">
@@ -589,11 +976,204 @@ const AltaAlfajores = () => {
               </div>
 
               <form onSubmit={handleSubmit} noValidate autoComplete="off">
-                {/* Producto y Categoría en la misma fila */}
+                {/* Lo primero que se elige, porque de eso depende todo el
+                    resto del formulario: un producto se hace con una receta,
+                    un subproducto se arma con productos ya dados de alta. */}
+                <div className="mb-3">
+                  <div className="d-flex gap-2">
+                    {[
+                      {
+                        valor: PRODUCTO,
+                        titulo: "Producto",
+                        ayuda: "Se hace con una receta",
+                      },
+                      {
+                        valor: SUBPRODUCTO,
+                        titulo: "Subproducto",
+                        ayuda: "Se arma con productos",
+                      },
+                    ].map(({ valor, titulo, ayuda }) => (
+                      <label
+                        key={valor}
+                        className={`flex-fill rounded-3 border p-2 text-center ${
+                          form.tipo === valor
+                            ? "border-ok bg-ok-suave"
+                            : "border-secondary border-opacity-25"
+                        }`}
+                        style={{ cursor: "pointer" }}
+                      >
+                        <input
+                          type="radio"
+                          name="tipo"
+                          className="d-none"
+                          value={valor}
+                          checked={form.tipo === valor}
+                          onChange={handleChange}
+                        />
+                        <span
+                          className={`d-block fw-bold ${
+                            form.tipo === valor ? "text-white" : "text-secondary"
+                          }`}
+                          style={{ fontSize: "0.85rem" }}
+                        >
+                          {titulo}
+                        </span>
+                        <span
+                          className={form.tipo === valor ? "text-ok" : "text-secondary"}
+                          style={{ fontSize: "0.7rem" }}
+                        >
+                          {ayuda}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* De quien es este subproducto. Es una sola pregunta, y
+                    "Mezcla de alfajores" es una respuesta valida: una caja de 6
+                    es del clasico, pero un surtido no es de nadie.
+
+                    De la respuesta sale todo lo demas: el costo, las unidades y
+                    el nombre. Por eso no hay ningun otro campo que pueda decir
+                    algo distinto. */}
+                {form.tipo === SUBPRODUCTO && (
+                  <div className="mb-2">
+                    <label
+                      className="form-label text-secondary fw-semibold mb-1 d-block"
+                      style={{ fontSize: "0.78rem" }}
+                    >
+                      Subproducto de qué producto es <span className="text-danger">*</span>
+                    </label>
+
+                    {/* La respuesta entra en un renglon: de que producto es y,
+                        si es de uno, cuantos entran. */}
+                    <div className="d-flex align-items-center gap-2">
+                      <select
+                        name="padre"
+                        className="form-select form-select-sm mush-input py-1 px-2 flex-grow-1"
+                        style={{ fontSize: "0.85rem", minWidth: 0 }}
+                        value={form.padre}
+                        onChange={handleChange}
+                      >
+                        <option value="">-- Elegir --</option>
+                        {productosBase.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.nombre}
+                          </option>
+                        ))}
+                        <option value={MEZCLA}>{GRUPO_MEZCLA}</option>
+                      </select>
+
+                      {/* De un producto solo hace falta saber cuantos entran. */}
+                      {esDeUnProducto && (
+                        <>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            className="form-control form-control-sm mush-input mush-dato py-1 px-2 text-center flex-shrink-0"
+                            style={{ fontSize: "0.85rem", width: "62px" }}
+                            placeholder="0"
+                            value={form.lleva[0]?.cantidad ?? ""}
+                            onChange={(e) =>
+                              cambiarLinea(0, "cantidad", e.target.value.replace(/[^0-9]/g, ""))
+                            }
+                            autoComplete="off"
+                            title="Cuantas unidades entran por caja"
+                          />
+                          <span
+                            className="text-white text-nowrap flex-shrink-0"
+                            style={{ fontSize: "0.8rem" }}
+                          >
+                            por caja
+                          </span>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Una mezcla no es de nadie: hay que decir que lleva. */}
+                    {form.padre === MEZCLA && (
+                      <>
+                        <div className="mush-card-elevada rounded-3 p-2 mt-2">
+                          {form.lleva.map((linea, indice) => (
+                            <div className="row g-2 mb-2" key={indice}>
+                              <div className="col-7">
+                                <select
+                                  className="form-select form-select-sm mush-input py-1 px-2"
+                                  style={{ fontSize: "0.85rem" }}
+                                  value={linea.producto}
+                                  onChange={(e) => cambiarLinea(indice, "producto", e.target.value)}
+                                >
+                                  <option value="">-- Elegir producto --</option>
+                                  {productosBase.map((item) => (
+                                    <option key={item.id} value={item.id}>
+                                      {item.nombre}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="col-3">
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  className="form-control form-control-sm mush-input mush-dato py-1 px-2 text-center"
+                                  style={{ fontSize: "0.85rem" }}
+                                  placeholder="0"
+                                  value={linea.cantidad}
+                                  onChange={(e) =>
+                                    cambiarLinea(indice, "cantidad", e.target.value.replace(/[^0-9]/g, ""))
+                                  }
+                                  autoComplete="off"
+                                />
+                              </div>
+                              <div className="col-2 d-flex align-items-center">
+                                {form.lleva.length > 1 && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-outline-danger py-0 px-2 d-inline-flex align-items-center"
+                                    style={{ fontSize: "0.72rem", minHeight: "24px" }}
+                                    onClick={() => quitarLinea(indice)}
+                                    title="Quitar"
+                                  >
+                                    <i className="bi bi-trash"></i>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+
+                          <div className="d-flex justify-content-between align-items-center gap-2">
+                            <button
+                              type="button"
+                              className="btn-mush-outline py-1 px-3"
+                              style={{ fontSize: "0.78rem" }}
+                              onClick={agregarLinea}
+                            >
+                              Agregar otro producto
+                            </button>
+                            {/* Las unidades no son un campo: son la suma de lo
+                                que lleva, y se muestran para controlarla. */}
+                            <span className="text-secondary" style={{ fontSize: "0.75rem" }}>
+                              {unidadesDe(form.lleva) > 0
+                                ? `${unidadesDe(form.lleva)} unidades en total`
+                                : "sin unidades todavia"}
+                            </span>
+                          </div>
+                        </div>
+
+                        <p className="text-secondary mb-0 mt-1" style={{ fontSize: "0.72rem" }}>
+                          Una mezcla no se llama sola: hay que ponerle el nombre acá abajo.
+                        </p>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* Como se llama, de que es y con que se lo reconoce. */}
                 <div className="row g-2 mb-2">
-                  <div className="col-8">
+                  <div className="col-6">
                     <label className="form-label text-secondary fw-semibold mb-1" style={{ fontSize: "0.78rem" }}>
-                      Producto <span className="text-danger">*</span>
+                      {form.tipo === SUBPRODUCTO ? "Subproducto" : "Producto"}{" "}
+                      <span className="text-danger">*</span>
                     </label>
                     <input
                       type="text"
@@ -616,9 +1196,14 @@ const AltaAlfajores = () => {
                         <i className="bi bi-exclamation-circle-fill"></i> {errorNombre}
                       </div>
                     )}
+                    {form.tipo === SUBPRODUCTO && !errorNombre && (
+                      <div className="text-secondary mt-1" style={{ fontSize: "0.7rem" }}>
+                        Se arma solo con lo de arriba. Se puede cambiar.
+                      </div>
+                    )}
                   </div>
 
-                  <div className="col-4">
+                  <div className="col-3">
                     <label className="form-label text-secondary fw-semibold mb-1" style={{ fontSize: "0.78rem" }}>
                       Categoría
                     </label>
@@ -629,40 +1214,15 @@ const AltaAlfajores = () => {
                       value={form.categoria}
                       onChange={handleChange}
                     >
-                      {CATEGORIAS_DISPONIBLES.map((c) => (
+                      {categoriasVisibles.map((c) => (
                         <option key={c} value={c}>
                           {c}
                         </option>
                       ))}
                     </select>
                   </div>
-                </div>
 
-                {/* De donde sale el costo y como se vende: sin esto el producto
-                    no puede aparecer en Lista de Precios. */}
-                <div className="row g-2 mb-2">
-                  <div className="col-8">
-                    <label className="form-label text-secondary fw-semibold mb-1" style={{ fontSize: "0.78rem" }}>
-                      Se costea con <span className="text-danger">*</span>
-                    </label>
-                    <select
-                      name="receta"
-                      className="form-select form-select-sm mush-input py-1 px-2"
-                      style={{ fontSize: "0.85rem" }}
-                      value={form.receta}
-                      onChange={handleChange}
-                    >
-                      <option value="">-- Elegir receta --</option>
-                      <option value={RECETA_NUEVA}>+ Crear la receta de este producto</option>
-                      {recetasOrdenadas.map((receta) => (
-                        <option key={receta.slug} value={receta.slug}>
-                          {receta.nombre}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="col-4">
+                  <div className="col-3">
                     <label className="form-label text-secondary fw-semibold mb-1" style={{ fontSize: "0.78rem" }}>
                       Emoji
                     </label>
@@ -675,15 +1235,42 @@ const AltaAlfajores = () => {
                       value={form.emoji}
                       onChange={handleChange}
                       autoComplete="off"
+                      title="Windows + . abre el selector de emojis"
                     />
+                    {/* Nadie se acuerda del atajo, y sin el hay que ir a
+                        buscar el emoji a otro lado para copiarlo. */}
+                    <div
+                      className="text-secondary text-center mt-1"
+                      style={{ fontSize: "0.68rem", lineHeight: 1.2 }}
+                    >
+                      Windows + . para elegir
+                    </div>
                   </div>
                 </div>
 
-                {/* La receta nueva necesita su rinde antes de existir: los
-                    ingredientes de la masa se anotan por tanda, asi que sin
-                    este numero no hay costo por unidad. Es lo unico que se
-                    pregunta aca; el resto se carga despues, en Recetas. */}
-                {form.receta === RECETA_NUEVA && (
+                {/* Un producto que ya tiene receta la conserva: no se elige ni
+                    se cambia desde aca, porque la receta es suya. Se dice cual
+                    es para saber donde ir a cargarle los ingredientes. */}
+                {form.tipo === PRODUCTO && form.receta && (
+                  <div
+                    className="d-flex align-items-center flex-wrap gap-1 mb-2 text-secondary"
+                    style={{ fontSize: "0.78rem" }}
+                  >
+                    <i className="bi bi-journal-text"></i>
+                    Se hace con la receta
+                    <span className="text-white fw-semibold">{nombreDeReceta(form.receta)}</span>
+                    <span style={{ fontSize: "0.72rem" }}>
+                      — sus ingredientes y su rinde se cargan en Recetas.
+                    </span>
+                  </div>
+                )}
+
+                {/* La receta se crea junto con el producto, y necesita su
+                    rinde antes de existir: los ingredientes de la masa se
+                    anotan por tanda, asi que sin este numero no hay costo por
+                    unidad. Es lo unico que se pregunta aca; el resto se carga
+                    despues, en Recetas. */}
+                {form.tipo === PRODUCTO && (
                   <div className="bg-ok-suave border-ok border rounded-3 p-2 mb-2">
                     <div className="d-flex align-items-center gap-2 flex-wrap">
                       <span className="text-white fw-semibold" style={{ fontSize: "0.82rem" }}>
@@ -694,175 +1281,51 @@ const AltaAlfajores = () => {
                         name="rinde"
                         min="1"
                         step="1"
-                        className="form-control form-control-sm mush-input py-1 px-2 text-center"
+                        className="form-control form-control-sm mush-input mush-dato py-1 px-2 text-center"
                         style={{ fontSize: "0.85rem", width: "95px" }}
-                        placeholder="126"
                         value={form.rinde}
                         onChange={handleChange}
                         autoComplete="off"
                       />
                       <span className="text-white" style={{ fontSize: "0.82rem" }}>
-                        {unidadDeRindeEnPlural(form.categoria)}
+                        {form.unidadRindeActual
+                          ? enPlural(form.unidadRindeActual)
+                          : unidadDeRindeEnPlural(form.categoria)}
                       </span>
                     </div>
                     <p className="text-ok mb-0 mt-1" style={{ fontSize: "0.72rem" }}>
-                      La receta se crea vacia, con su tarjeta en Recetas y en Costos para
-                      cargarle los ingredientes.
+                      {necesitaReceta
+                        ? "Se crea la receta de este producto, vacía, con su tarjeta en Recetas y en Costos para cargarle los ingredientes."
+                        : "Es el número por el que se reparten los ingredientes de la masa, así que de él sale el costo de cada unidad."}
                     </p>
                   </div>
                 )}
 
-                <div className="mb-2">
-                  <label className="form-label text-secondary fw-semibold mb-1 d-block" style={{ fontSize: "0.78rem" }}>
-                    Se vende
-                  </label>
-                  <div className="d-flex gap-3">
-                    {[
-                      { valor: "unidad", texto: "Por unidad" },
-                      { valor: "caja", texto: "Por caja" },
-                    ].map(({ valor, texto }) => (
-                      <label
-                        key={valor}
-                        className="d-flex align-items-center gap-1 text-white"
-                        style={{ fontSize: "0.82rem", cursor: "pointer" }}
-                      >
-                        <input
-                          type="radio"
-                          name="presentacion"
-                          className="form-check-input m-0"
-                          value={valor}
-                          checked={form.presentacion === valor}
-                          onChange={handleChange}
-                        />
-                        {texto}
-                      </label>
-                    ))}
+                {/* En que va: es lo unico que un subproducto suma por su cuenta
+                    al costo de lo que lleva adentro. */}
+                {form.tipo === SUBPRODUCTO && (
+                  <div className="mb-2">
+                    <label
+                      className="form-label text-secondary fw-semibold mb-1"
+                      style={{ fontSize: "0.78rem" }}
+                    >
+                      Caja de carton
+                    </label>
+                    <select
+                      name="carton"
+                      className="form-select form-select-sm mush-input py-1 px-2"
+                      style={{ fontSize: "0.85rem" }}
+                      value={form.carton}
+                      onChange={handleChange}
+                    >
+                      <option value="">-- Sin caja --</option>
+                      {cartones.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.nombre}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                </div>
-
-                {form.presentacion === "caja" && (
-                  <>
-                    <div className="row g-2 mb-2">
-                      <div className="col-4">
-                        <label className="form-label text-secondary fw-semibold mb-1" style={{ fontSize: "0.78rem" }}>
-                          Unidades
-                        </label>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          name="unidades"
-                          className="form-control form-control-sm mush-input mush-dato py-1 px-2 text-center"
-                          style={{ fontSize: "0.85rem" }}
-                          placeholder="0"
-                          value={
-                            form.armada
-                              ? componentesValidos(form.composicion).reduce(
-                                  (suma, c) => suma + Number(c.cantidad),
-                                  0
-                                ) || ""
-                              : form.unidades
-                          }
-                          onChange={handleChange}
-                          disabled={form.armada}
-                          autoComplete="off"
-                        />
-                      </div>
-
-                      <div className="col-8">
-                        <label className="form-label text-secondary fw-semibold mb-1" style={{ fontSize: "0.78rem" }}>
-                          Caja de carton
-                        </label>
-                        <select
-                          name="carton"
-                          className="form-select form-select-sm mush-input py-1 px-2"
-                          style={{ fontSize: "0.85rem" }}
-                          value={form.carton}
-                          onChange={handleChange}
-                        >
-                          <option value="">-- Sin caja --</option>
-                          {cartones.map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {item.nombre}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="mb-2">
-                      <label
-                        className="d-flex align-items-center gap-2 text-white"
-                        style={{ fontSize: "0.82rem", cursor: "pointer" }}
-                      >
-                        <input
-                          type="checkbox"
-                          name="armada"
-                          className="form-check-input m-0"
-                          checked={form.armada}
-                          onChange={handleChange}
-                        />
-                        La caja lleva productos distintos
-                      </label>
-                    </div>
-
-                    {form.armada && (
-                      <div className="mush-card-elevada rounded-3 p-2 mb-2">
-                        {form.composicion.map((componente, indice) => (
-                          <div className="row g-2 mb-2" key={indice}>
-                            <div className="col-7">
-                              <select
-                                className="form-select form-select-sm mush-input py-1 px-2"
-                                style={{ fontSize: "0.85rem" }}
-                                value={componente.receta}
-                                onChange={(e) => cambiarComponente(indice, "receta", e.target.value)}
-                              >
-                                <option value="">-- Elegir --</option>
-                                {recetasOrdenadas.map((receta) => (
-                                  <option key={receta.slug} value={receta.slug}>
-                                    {receta.nombre}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                            <div className="col-3">
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                className="form-control form-control-sm mush-input mush-dato py-1 px-2 text-center"
-                                style={{ fontSize: "0.85rem" }}
-                                placeholder="0"
-                                value={componente.cantidad}
-                                onChange={(e) =>
-                                  cambiarComponente(indice, "cantidad", e.target.value.replace(/[^0-9]/g, ""))
-                                }
-                                autoComplete="off"
-                              />
-                            </div>
-                            <div className="col-2 d-flex align-items-center">
-                              <button
-                                type="button"
-                                className="btn btn-sm btn-outline-danger py-0 px-2 d-inline-flex align-items-center"
-                                style={{ fontSize: "0.72rem", minHeight: "24px" }}
-                                onClick={() => quitarComponente(indice)}
-                                title="Quitar"
-                              >
-                                <i className="bi bi-trash"></i>
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-
-                        <button
-                          type="button"
-                          className="btn-mush-outline py-1 px-3"
-                          style={{ fontSize: "0.78rem" }}
-                          onClick={agregarComponente}
-                        >
-                          Agregar producto
-                        </button>
-                      </div>
-                    )}
-                  </>
                 )}
 
                 <div className="mb-3">

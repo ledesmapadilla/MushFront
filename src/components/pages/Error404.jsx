@@ -49,7 +49,7 @@ const Error404 = () => {
     <div
       className="container px-3 text-center d-flex flex-column justify-content-center align-items-center flex-grow-1 position-relative py-3"
       style={{
-        minHeight: "calc(100vh - 170px)",
+        minHeight: "calc(100vh - 245px)",
         maxWidth: "680px",
       }}
     >

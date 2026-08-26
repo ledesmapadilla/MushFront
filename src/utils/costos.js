@@ -152,6 +152,9 @@ const costearManoDeObra = (receta, personal) => {
 };
 
 const COSTO_VACIO = {
+  // Las secciones que la receta declara que no lleva. Un cero en una de ellas
+  // no es un dato que falte: es que ahi no va nada.
+  sinUso: [],
   ingredientes: 0,
   packaging: 0,
   manoObra: 0,
@@ -175,9 +178,11 @@ export const costearProducto = (receta, { ingredientes, packaging, personal } = 
   (receta.ingredientes || []).forEach((linea) => {
     const id = linea.seccion || SECCION_POR_DEFECTO;
     const seccion = SECCIONES_COSTO.find((s) => s.id === id);
-    // Cada receta declara en su dato que secciones no lleva (una tableta no
-    // tiene ingredientes por unidad).
-    if (!seccion || receta.sinSecciones?.includes(id)) return;
+    // "sinSecciones" servia para esconder tarjetas, y con eso se salteaban sus
+    // lineas al costear. Ahora las tarjetas se ven todas, asi que lo que este
+    // cargado cuenta: una seccion vacia ya suma cero por si sola, y saltearla
+    // solo lograba que lo que se anotara ahi desapareciera sin aviso.
+    if (!seccion) return;
 
     const costeada = costearLinea(
       linea,
@@ -195,6 +200,7 @@ export const costearProducto = (receta, { ingredientes, packaging, personal } = 
   const detalleManoObra = costearManoDeObra(receta, personal);
 
   return {
+    sinUso: receta.sinSecciones || [],
     ingredientes: costoIngredientes,
     packaging: acumulado.packaging,
     manoObra: detalleManoObra.costo,

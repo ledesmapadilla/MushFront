@@ -107,7 +107,7 @@ const Produccion = () => {
   };
 
   return (
-    <div className="container px-4 py-4">
+    <div className="container px-4 py-4" style={{ paddingBottom: "75px" }}>
       {/* Header */}
       <div className="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
         <div>

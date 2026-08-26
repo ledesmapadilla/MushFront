@@ -32,7 +32,7 @@ const Inicio = () => {
   );
 
   return (
-    <div className="container px-4 pt-2 pb-5">
+    <div className="container px-4 pt-2" style={{ paddingBottom: "75px" }}>
       {/* Hero Banner de Marca Contenido */}
       <section className="mush-hero mush-card p-4 p-lg-5 mb-4 rounded-4">
         <div className="row align-items-center gy-4">

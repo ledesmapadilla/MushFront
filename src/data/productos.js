@@ -2,10 +2,31 @@
  * Las variedades, y el catalogo de lo que se hace.
  *
  * Las tarjetas de Recetas y de Costos ya no estan escritas aca: salen del alta
- * de Productos, que es la unica lista. Cada producto declara con que receta se
- * costea, y esa receta es la tarjeta. Dos presentaciones de lo mismo (la unidad
- * y su caja de 6) comparten receta, asi que son una sola tarjeta.
+ * de Productos, que es la unica lista.
  */
+
+/**
+ * Lo que se da de alta es de uno de dos tipos, y de eso depende todo lo demas.
+ *
+ *   Producto     se hace con una receta y se vende por unidad.
+ *                (Clasico Semiamargo, Mendiant, Tabletas)
+ *
+ *   Subproducto  no se hace: se arma con productos ya dados de alta.
+ *                (Clasico Semiamargo CAJA x 6, Alfajores Surtidos x 12)
+ *
+ * Un subproducto no elige receta: su costo es el de lo que lleva adentro mas su
+ * caja de carton. Lo normal es que lleve un solo producto repetido; si lleva
+ * mas de uno, es un surtido.
+ */
+export const PRODUCTO = "producto";
+export const SUBPRODUCTO = "subproducto";
+
+// Lo dado de alta antes de que existieran los tipos no trae el campo: se deduce
+// de como se vendia.
+export const tipoDe = (item) =>
+  item?.tipo || (item?.presentacion === "caja" ? SUBPRODUCTO : PRODUCTO);
+
+export const esSubproducto = (item) => tipoDe(item) === SUBPRODUCTO;
 
 /**
  * Productos que en vez de una receta propia agrupan variedades. Al abrirlos se
@@ -35,11 +56,11 @@ export const productoDeVariedad = (slug) =>
   ) || null;
 
 /**
- * Una tarjeta por receta usada en el alta de Productos.
+ * Una tarjeta por producto dado de alta.
  *
- * El nombre, la categoria y el emoji salen del producto que la usa. Cuando son
- * varios manda el que se vende suelto: la tarjeta se llama "Clasico Semiamargo"
- * y no "Clasico semiamargo (CAJA x 6)".
+ * Los subproductos no tienen tarjeta propia: una caja de 6 no se hace aparte,
+ * se arma con el producto que ya la tiene. Por eso Recetas y Costos muestran
+ * nueve tarjetas y no veintisiete.
  *
  * El orden es el del alta, asi que un producto nuevo aparece sin tocar codigo.
  */
@@ -47,12 +68,11 @@ export const productosDeCatalogo = (alfajores) => {
   const porReceta = new Map();
 
   (alfajores || [])
-    .filter((producto) => producto.activo !== false && producto.receta)
+    .filter((producto) => producto.activo !== false && !esSubproducto(producto) && producto.receta)
     .forEach((producto) => {
-      const anterior = porReceta.get(producto.receta);
-      const manda =
-        !anterior || (anterior.presentacion === "caja" && producto.presentacion !== "caja");
-      if (manda) porReceta.set(producto.receta, producto);
+      // Si dos productos apuntaran a la misma receta, manda el primero: la
+      // tarjeta es de la receta, y es una sola.
+      if (!porReceta.has(producto.receta)) porReceta.set(producto.receta, producto);
     });
 
   return [...porReceta].map(([slug, producto]) => ({

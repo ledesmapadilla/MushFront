@@ -6,11 +6,12 @@
  * que receta sale su costo. Precios y Ventas leen de aca, no de listas propias.
  *
  * La division es esta:
- *   Receta   -> como se hace          (ingredientes, packaging, mano de obra)
- *   Producto -> que se vende          (presentacion, cuantas unidades, su caja)
+ *   Receta       -> como se hace   (ingredientes, packaging, mano de obra)
+ *   Producto     -> que se vende   (de que receta sale, cuanto se cobra)
+ *   Subproducto  -> como se vende  (que productos lleva, en que caja de carton)
  *
  * Una caja no es otra receta: es el mismo producto en otra presentacion, y por
- * eso el costo de la caja sale del costo unitario de su receta.
+ * eso su costo sale de los productos que lleva adentro mas la caja de carton.
  */
 import { buscarReceta, costearProducto } from "./costos.js";
 import { variedadesDe } from "../data/productos.js";
@@ -68,26 +69,55 @@ export const articulosDeVenta = (alfajores, recetas, datos) => {
   const precioDeCaja = (id) =>
     Number((datos.packaging || []).find((p) => p.id === id)?.precio) || 0;
 
+  // Un subproducto dice que lleva por producto, no por receta: la receta con
+  // la que se costea cada linea es la del producto que nombra.
+  const recetaDeProducto = (id) => (alfajores || []).find((p) => p.id === id)?.receta || "";
+
   return (alfajores || [])
-    .filter((producto) => producto.activo !== false && producto.receta)
+    .filter(
+      (producto) =>
+        producto.activo !== false &&
+        (producto.receta || (producto.composicion || []).length > 0)
+    )
     .map((producto) => {
       const { costo: propio } = costoDeReceta(producto.receta, recetas, datos);
       const costoUnitario = enCentavos(propio.total);
       const carton = producto.presentacion === "caja" ? precioDeCaja(producto.carton) : 0;
 
-      // Una caja armada lleva varios productos distintos; una comun, el mismo
-      // repetido; una unidad, uno solo.
-      const contenido = (producto.composicion || []).map(({ receta, cantidad }) => ({
-        receta,
-        cantidad,
-        costo: enCentavos(costoDeReceta(receta, recetas, datos).costo.total),
-      }));
+      // Lo que lleva un subproducto: una linea cuando es una caja de N del
+      // mismo producto, varias cuando es un surtido. Las cajas cargadas antes
+      // de los subproductos no lo declaran, y se resuelven mas abajo con su
+      // receta y sus unidades.
+      const contenido = (producto.composicion || [])
+        .map(({ receta, producto: idProducto, cantidad }) => {
+          const slug = idProducto ? recetaDeProducto(idProducto) : receta;
+          return {
+            receta: slug,
+            producto: idProducto || "",
+            cantidad,
+            costo: enCentavos(costoDeReceta(slug, recetas, datos).costo.total),
+          };
+        })
+        .filter((item) => item.receta);
+
+      const sumaContenido = contenido.reduce(
+        (suma, item) => suma + item.costo * item.cantidad,
+        0
+      );
 
       const costo = contenido.length
-        ? contenido.reduce((suma, item) => suma + item.costo * item.cantidad, 0) + carton
+        ? sumaContenido + carton
         : producto.presentacion === "caja"
           ? costoUnitario * (Number(producto.unidades) || 0) + carton
           : costoUnitario;
+
+      // Cuanto cuesta una unidad de las que van adentro. Un subproducto no
+      // tiene receta propia, asi que es el promedio de lo que lleva.
+      const unidades = Number(producto.unidades) || 0;
+      const porUnidad =
+        costoUnitario > 0 || !contenido.length || !unidades
+          ? costoUnitario
+          : enCentavos(sumaContenido / unidades);
 
       return {
         // El producto entero, para poder guardarle el precio.
@@ -99,10 +129,10 @@ export const articulosDeVenta = (alfajores, recetas, datos) => {
         categoria: producto.categoria,
         receta: producto.receta,
         porCaja: producto.presentacion === "caja",
-        unidades: Number(producto.unidades) || 0,
+        unidades,
         contenido,
         carton,
-        costoUnitario,
+        costoUnitario: porUnidad,
         costo: enCentavos(costo),
         // Un producto sin costo todavia no se puede costear (le falta la receta
         // o los precios de sus insumos).

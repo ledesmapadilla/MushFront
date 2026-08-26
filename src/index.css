@@ -822,6 +822,42 @@ header.sticky-top {
   overflow: hidden;
 }
 
+/* Encabezado fijo sin las demas reglas de .mush-tabla-pareja: el overflow
+   hidden que redondea las esquinas de .mush-tabla anula el sticky de los th,
+   asi que se resigna el recorte de la esquina y se redondea el th en su lugar.
+   A diferencia de las tablas pareja, aca las celdas si pueden crecer. */
+.mush-tabla-titulo-fijo {
+  overflow: visible;
+}
+
+.mush-tabla-titulo-fijo thead th {
+  z-index: 6;
+}
+
+.mush-tabla-titulo-fijo thead th:first-child {
+  border-top-left-radius: 0.65rem;
+}
+
+.mush-tabla-titulo-fijo thead th:last-child {
+  border-top-right-radius: 0.65rem;
+}
+
+/* La fila recien creada, para encontrarla de un vistazo entre las demas. Se
+   pinta la celda y no la fila: .mush-tabla pone --bs-table-bg transparente y
+   el fondo de un <tr> queda tapado por el de sus <td>. */
+.mush-fila-nueva > td {
+  background-color: var(--mush-ok-bg) !important;
+  transition: background-color 0.4s ease;
+}
+
+/* La caja de una parte del costo que la receta no tiene cargada. El borde la
+   distingue de las otras tres sin gritar: el dato importante sigue siendo el
+   total. */
+.mush-caja-sin-completar {
+  border-color: var(--bs-danger) !important;
+  background-color: rgba(220, 53, 69, 0.1) !important;
+}
+
 /* Corte vertical dentro de una tabla: linea doble, para distinguirlo de la
    grilla comun. Separa el producto y su costo de los precios de venta. */
 .mush-tabla .mush-col-doble {
