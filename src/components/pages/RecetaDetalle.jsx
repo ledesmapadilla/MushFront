@@ -1264,9 +1264,17 @@ const RecetaDetalle = () => {
             </h2>
             <span className="mush-display text-secondary fs-2">-</span>
             <span className="mush-display text-dulce fs-2">{receta.nombre}</span>
-            {/* Contra el borde derecho: es la unica accion de la pantalla, y no
-                se mezcla con el titulo. */}
-            <span className="flex-grow-1"></span>
+          </div>
+        </div>
+
+        {/* La tarjeta se centra en el alto restante */}
+        <div
+          className="mx-auto w-100 d-flex flex-column justify-content-center flex-grow-1"
+          style={{ maxWidth: "1040px" }}
+        >
+          {/* Justo arriba de la tarjeta y contra su borde derecho: es lo que
+              borra, asi que se lee junto con ella y no con el titulo. */}
+          <div className="d-flex justify-content-end mb-2">
             <button
               type="button"
               className="btn btn-sm btn-outline-danger py-1 px-3 d-inline-flex align-items-center gap-2 rounded-3"
@@ -1281,13 +1289,7 @@ const RecetaDetalle = () => {
               <i className="bi bi-eraser"></i> Borrar valores
             </button>
           </div>
-        </div>
 
-        {/* La tarjeta se centra en el alto restante */}
-        <div
-          className="mx-auto w-100 d-flex flex-column justify-content-center flex-grow-1"
-          style={{ maxWidth: "1040px" }}
-        >
           <div className="mush-card p-3 p-sm-4">
             <div className="d-flex flex-column flex-md-row align-items-stretch text-center">
               {divisiones.map((division, i) => {
