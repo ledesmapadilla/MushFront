@@ -428,6 +428,16 @@ const RecetaDetalle = () => {
         observaciones: "",
       });
       guardarReceta({ ...receta, manoDeObra: {} });
+
+      // La pantalla queda vacia igual que si nunca se hubiera cargado, asi que
+      // el aviso es lo que confirma que se borro y no que se perdio.
+      Swal.fire({
+        ...swalConfig,
+        title: "Se han borrado los valores de mano de obra",
+        icon: "success",
+        timer: 1600,
+        showConfirmButton: false,
+      });
     });
   };
 
