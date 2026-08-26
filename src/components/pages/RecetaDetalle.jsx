@@ -677,6 +677,17 @@ const RecetaDetalle = () => {
       const lista = (receta.ingredientes || []).filter((x) => !mismaFila(x, item));
       guardarReceta({ ...receta, ingredientes: lista });
 
+      // El mismo aviso que al agregar o al guardar: la fila desaparece de una
+      // tabla larga y sin esto no queda claro que se borro la que se queria.
+      Swal.fire({
+        ...swalConfig,
+        title: `${item.nombre} borrado`,
+        text: "Ya no está en la receta.",
+        icon: "success",
+        timer: 1400,
+        showConfirmButton: false,
+      });
+
       if (mismaFila(itemEditando, item)) handleCerrarModal();
     });
   };
