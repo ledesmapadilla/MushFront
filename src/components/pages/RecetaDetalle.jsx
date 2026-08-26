@@ -391,6 +391,46 @@ const RecetaDetalle = () => {
     return pagoMO / producidos;
   })();
 
+  // Lo cargado en esta pantalla. Sirve para no ofrecer borrar lo que no existe.
+  const hayManoDeObraCargada =
+    Boolean(moBorrador.fecha) ||
+    Boolean(moBorrador.personalId) ||
+    Number(moBorrador.mensual) > 0 ||
+    Number(moBorrador.alfajoresProducidos) > 0 ||
+    Boolean((moBorrador.observaciones || "").trim());
+
+  // Empezar de cero: la mano de obra queda sin cargar, como recien dada de alta.
+  // No es borrar una fila -aca no hay filas, hay un unico valor por receta-, asi
+  // que se avisa que el costo cambia: sin produccion anotada deja de sumar, y en
+  // Costos su caja pasa a decir "sin completar en la receta".
+  const borrarManoDeObra = () => {
+    Swal.fire({
+      ...swalConfig,
+      title: "¿Borrar los valores?",
+      text: "La mano de obra de esta receta queda sin cargar y deja de sumar al costo.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Si, borrar",
+      cancelButtonText: "Cancelar",
+      customClass: {
+        popup: "rounded-4 border border-secondary border-opacity-25 shadow-lg",
+        confirmButton: "btn btn-danger px-3 py-1 rounded-3 me-2 fw-bold",
+        cancelButton: "btn btn-outline-secondary px-3 py-1 rounded-3 text-dark",
+      },
+    }).then((result) => {
+      if (!result.isConfirmed) return;
+
+      setMoBorrador({
+        fecha: "",
+        personalId: "",
+        mensual: "",
+        alfajoresProducidos: "",
+        observaciones: "",
+      });
+      guardarReceta({ ...receta, manoDeObra: {} });
+    });
+  };
+
   // Filas de una seccion, filtradas y ordenadas. Se usa tanto para la tabla
   // principal como para las tablas anidadas.
   const filasDe = (seccion) => {
@@ -1224,6 +1264,22 @@ const RecetaDetalle = () => {
             </h2>
             <span className="mush-display text-secondary fs-2">-</span>
             <span className="mush-display text-dulce fs-2">{receta.nombre}</span>
+            {/* Contra el borde derecho: es la unica accion de la pantalla, y no
+                se mezcla con el titulo. */}
+            <span className="flex-grow-1"></span>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-danger py-1 px-3 d-inline-flex align-items-center gap-2 rounded-3"
+              onClick={borrarManoDeObra}
+              disabled={!hayManoDeObraCargada}
+              title={
+                hayManoDeObraCargada
+                  ? "Dejar la mano de obra de esta receta sin cargar"
+                  : "No hay valores cargados"
+              }
+            >
+              <i className="bi bi-eraser"></i> Borrar valores
+            </button>
           </div>
         </div>
 
