@@ -214,6 +214,21 @@ export function MushProvider({ children }) {
     }
   }, [compras]);
 
+  /**
+   * Lo ultimo que fallo contra el servidor.
+   *
+   * El proyecto trabaja siempre contra el backend. Un guardado que no llego no
+   * se finge hecho ni queda "solo en este navegador": al refrescar reaparece lo
+   * viejo y no hay forma de darse cuenta de que se perdio. Cuando algo falla,
+   * la pantalla no cambia y esto lo dice.
+   */
+  const [fallaBackend, setFallaBackend] = useState("");
+
+  const anotarFalla = (accion, err) => {
+    const detalle = err?.message || "El servidor no responde.";
+    setFallaBackend(`No se pudo ${accion}. ${detalle}`);
+  };
+
   // Funciones de cálculo vinculadas al estado actual
   const costear = (receta) => calcCostearReceta(receta, ingredientes, costosOperativos);
   const consumoOrden = (receta, tandas) => calcConsumoDeOrden(receta, tandas, ingredientes);
@@ -234,6 +249,16 @@ export function MushProvider({ children }) {
             apiPersonal.obtenerTodos(),
           ]);
 
+        // `obtenerTodos` devuelve null cuando no pudo conectarse. Sin datos del
+        // servidor, lo que se ve es la copia vieja del navegador y no se va a
+        // poder guardar nada: hay que decirlo antes de que alguien trabaje
+        // encima.
+        if (!datosIngredientes || !datosAlfajores || !datosPackaging || !datosRecetas) {
+          setFallaBackend(
+            "No hay conexión con el servidor. Lo que ves puede estar desactualizado y no se va a poder guardar."
+          );
+        }
+
         if (datosIngredientes && Array.isArray(datosIngredientes)) {
           setIngredientes(datosIngredientes);
         }
@@ -246,30 +271,15 @@ export function MushProvider({ children }) {
           setPackaging(datosPackaging);
         }
 
-        // Una lista vacia del backend no debe borrar lo que ya hay cargado
-        // localmente (mismo criterio que con las recetas).
-        if (datosPersonal && Array.isArray(datosPersonal) && datosPersonal.length > 0) {
+        if (datosPersonal && Array.isArray(datosPersonal)) {
           setPersonal(datosPersonal);
         }
 
-        if (datosRecetas && Array.isArray(datosRecetas) && datosRecetas.length > 0) {
-          // El backend puede devolver la receta todavia sin ingredientes. En ese
-          // caso se conserva lo que ya estaba cargado localmente en vez de pisarlo.
-          setRecetas((prev) =>
-            datosRecetas.map((remota) => {
-              const local = (prev || []).find((r) => mismaReceta(r, remota));
-              const localTiene = local && (local.ingredientes || []).length > 0;
-              const remotaTiene = (remota.ingredientes || []).length > 0;
-
-              if (localTiene && !remotaTiene) {
-                return { ...remota, ingredientes: local.ingredientes };
-              }
-              return remota;
-            })
-          );
+        if (datosRecetas && Array.isArray(datosRecetas)) {
+          setRecetas(datosRecetas);
         }
       } catch (e) {
-        console.warn("Backend no disponible al iniciar. Operando en modo local persistente:", e);
+        setFallaBackend(`No hay conexión con el servidor. ${e?.message || ""}`.trim());
       }
     };
     cargarBackend();
@@ -318,24 +328,19 @@ export function MushProvider({ children }) {
       guardado.id = `${baseSlug}_${randomSuffix}`;
     }
 
-    // Intentar sincronizar con Backend si está disponible
+    // Primero el servidor: si no se pudo guardar ahi, no se guardo.
     try {
       const existe = ingredientes.some((i) => i.id === guardado.id);
-      if (existe) {
-        const res = await apiIngredientes.actualizar(guardado.id, guardado);
-        if (res) guardado = { ...guardado, ...res };
-      } else {
-        const res = await apiIngredientes.crear(guardado);
-        if (res) guardado = { ...guardado, ...res };
-      }
+      const res = existe
+        ? await apiIngredientes.actualizar(guardado.id, guardado)
+        : await apiIngredientes.crear(guardado);
+      if (res) guardado = { ...guardado, ...res };
     } catch (err) {
-      console.warn("No se pudo conectar al Backend. Guardando ingrediente de forma local y segura:", err.message);
-      if (!err.message.includes("No se pudo conectar") && !err.message.includes("Failed to fetch")) {
-        throw err;
-      }
+      anotarFalla("guardar el ingrediente", err);
+      throw err;
     }
 
-    // Siempre persistir en el estado y localStorage (Blindaje de datos)
+    // Recien ahora, con el servidor al dia, se actualiza la pantalla.
     const listaNueva = ingredientes.some((i) => i.id === guardado.id)
       ? ingredientes.map((i) => (i.id === guardado.id ? { ...i, ...guardado } : i))
       : [...ingredientes, guardado];
@@ -350,7 +355,8 @@ export function MushProvider({ children }) {
     try {
       await apiIngredientes.eliminar(id);
     } catch (err) {
-      console.warn("Fallo eliminar en backend (eliminando localmente):", err.message);
+      anotarFalla("eliminar el ingrediente", err);
+      throw err;
     }
     setIngredientes((prev) => prev.filter((i) => i.id !== id));
   };
@@ -370,20 +376,16 @@ export function MushProvider({ children }) {
       guardado.id = `alf_${baseSlug}_${randomSuffix}`;
     }
 
+    // Primero el servidor: si no se pudo guardar ahi, no se guardo.
     try {
       const existe = alfajores.some((a) => a.id === guardado.id);
-      if (existe) {
-        const res = await apiAlfajores.actualizar(guardado.id, guardado);
-        if (res) guardado = { ...guardado, ...res };
-      } else {
-        const res = await apiAlfajores.crear(guardado);
-        if (res) guardado = { ...guardado, ...res };
-      }
+      const res = existe
+        ? await apiAlfajores.actualizar(guardado.id, guardado)
+        : await apiAlfajores.crear(guardado);
+      if (res) guardado = { ...guardado, ...res };
     } catch (err) {
-      console.warn("No se pudo conectar al Backend. Guardando producto de forma local y segura:", err.message);
-      if (!err.message.includes("No se pudo conectar") && !err.message.includes("Failed to fetch")) {
-        throw err;
-      }
+      anotarFalla("guardar el producto", err);
+      throw err;
     }
 
     setAlfajores((prev) => {
@@ -402,7 +404,8 @@ export function MushProvider({ children }) {
     try {
       await apiAlfajores.eliminar(id);
     } catch (err) {
-      console.warn("Fallo eliminar alfajor en backend (eliminando localmente):", err.message);
+      anotarFalla("eliminar el producto", err);
+      throw err;
     }
     setAlfajores((prev) => prev.filter((a) => a.id !== id));
   };
@@ -422,20 +425,16 @@ export function MushProvider({ children }) {
       guardado.id = `pack_${baseSlug}_${randomSuffix}`;
     }
 
+    // Primero el servidor: si no se pudo guardar ahi, no se guardo.
     try {
       const existe = packaging.some((p) => p.id === guardado.id);
-      if (existe) {
-        const res = await apiPackaging.actualizar(guardado.id, guardado);
-        if (res) guardado = { ...guardado, ...res };
-      } else {
-        const res = await apiPackaging.crear(guardado);
-        if (res) guardado = { ...guardado, ...res };
-      }
+      const res = existe
+        ? await apiPackaging.actualizar(guardado.id, guardado)
+        : await apiPackaging.crear(guardado);
+      if (res) guardado = { ...guardado, ...res };
     } catch (err) {
-      console.warn("No se pudo conectar al Backend. Guardando packaging de forma local y segura:", err.message);
-      if (!err.message.includes("No se pudo conectar") && !err.message.includes("Failed to fetch")) {
-        throw err;
-      }
+      anotarFalla("guardar el packaging", err);
+      throw err;
     }
 
     const listaNueva = packaging.some((p) => p.id === guardado.id)
@@ -452,7 +451,8 @@ export function MushProvider({ children }) {
     try {
       await apiPackaging.eliminar(id);
     } catch (err) {
-      console.warn("Fallo eliminar packaging en backend (eliminando localmente):", err.message);
+      anotarFalla("eliminar el packaging", err);
+      throw err;
     }
     setPackaging((prev) => prev.filter((p) => p.id !== id));
   };
@@ -467,12 +467,8 @@ export function MushProvider({ children }) {
       return [...prev, persona];
     });
 
-  // Guardado optimista: el personal queda en el estado y en localStorage al
-  // instante, y la sincronizacion con el backend viaja aparte. La pantalla ya
-  // valida nombre y duplicados antes de llamar, asi que esperar la respuesta
-  // solo agregaba demora.
-  const guardarPersonal = (datos) => {
-    const guardado = { ...datos };
+  const guardarPersonal = async (datos) => {
+    let guardado = { ...datos };
 
     if (!guardado.id) {
       const baseSlug = (guardado.nombre || "per")
@@ -487,25 +483,24 @@ export function MushProvider({ children }) {
 
     const existe = personal.some((p) => p.id === guardado.id);
 
+    // Primero el servidor: si no se pudo guardar ahi, no se guardo. El backend
+    // completa ademas campos como creadoEn / actualizadoEn.
+    try {
+      const res = existe
+        ? await apiPersonal.actualizar(guardado.id, guardado)
+        : await apiPersonal.crear(guardado);
+      if (res) guardado = { ...guardado, ...res };
+    } catch (err) {
+      anotarFalla("guardar el legajo", err);
+      throw err;
+    }
+
     fusionarPersonal(guardado);
     anotarCambioDeCosto({
       personal: existe
         ? personal.map((p) => (p.id === guardado.id ? { ...p, ...guardado } : p))
         : [...personal, guardado],
     });
-
-    const sincronizar = existe
-      ? apiPersonal.actualizar(guardado.id, guardado)
-      : apiPersonal.crear(guardado);
-
-    sincronizar
-      .then((res) => {
-        // El backend completa campos como creadoEn / actualizadoEn
-        if (res) fusionarPersonal({ ...guardado, ...res });
-      })
-      .catch((err) => {
-        console.warn("Backend no disponible al guardar personal, queda persistido localmente:", err.message);
-      });
 
     return guardado;
   };
@@ -514,7 +509,8 @@ export function MushProvider({ children }) {
     try {
       await apiPersonal.eliminar(id);
     } catch (err) {
-      console.warn("Fallo eliminar personal en backend (eliminando localmente):", err.message);
+      anotarFalla("eliminar el legajo", err);
+      throw err;
     }
     setPersonal((prev) => prev.filter((p) => p.id !== id));
   };
@@ -633,24 +629,26 @@ export function MushProvider({ children }) {
       }
     });
 
-  // Guardado optimista: la receta se persiste en el estado y en localStorage al
-  // instante y la sincronizacion con el backend viaja aparte. Esta funcion nunca
-  // rechazo por un fallo de red (el catch de abajo ya los absorbia), asi que
-  // esperar la respuesta solo agregaba demora a la interfaz.
-  const guardarReceta = (datos) => {
+  /**
+   * Guardar una receta.
+   *
+   * Primero el servidor y despues la pantalla: si el guardado no llego, la
+   * receta no se toca y el campo vuelve solo al valor que hay en el servidor.
+   *
+   * A diferencia de las demas, esta no relanza el error: casi todas sus
+   * llamadas son al salir de un campo y nadie espera la respuesta, asi que el
+   * aviso de arriba es lo unico que puede enterar de la falla.
+   */
+  const guardarReceta = async (datos) => {
     const guardada = { ...datos };
 
-    fusionarReceta(guardada);
-
-    apiRecetas
-      .guardar(guardada)
-      .then((res) => {
-        // El backend completa campos como creadoEn / actualizadoEn
-        if (res) fusionarReceta({ ...guardada, ...res });
-      })
-      .catch((err) => {
-        console.warn("Backend no disponible al guardar receta, queda persistida localmente:", err.message);
-      });
+    try {
+      const res = await apiRecetas.guardar(guardada);
+      // El backend completa campos como creadoEn / actualizadoEn.
+      fusionarReceta(res ? { ...guardada, ...res } : guardada);
+    } catch (err) {
+      anotarFalla("guardar la receta", err);
+    }
 
     return guardada;
   };
@@ -689,8 +687,34 @@ export function MushProvider({ children }) {
         setCostosOperativos,
         tema,
         alternarTema,
+        fallaBackend,
+        limpiarFallaBackend: () => setFallaBackend(""),
       }}
     >
+      {/* Sin servidor no se guarda nada, asi que el aviso va arriba de todo y
+          no se va solo: se cierra a mano, cuando se lo leyo. */}
+      {fallaBackend && (
+        <div
+          className="position-fixed top-0 start-0 w-100 px-3 pt-2"
+          style={{ zIndex: 2000 }}
+          role="alert"
+        >
+          <div className="container">
+            <div className="alert alert-danger d-flex align-items-center gap-2 mb-0 py-2 shadow">
+              <i className="bi bi-exclamation-octagon-fill"></i>
+              <span className="flex-grow-1" style={{ fontSize: "0.85rem" }}>
+                {fallaBackend}
+              </span>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => setFallaBackend("")}
+                aria-label="Cerrar"
+              ></button>
+            </div>
+          </div>
+        </div>
+      )}
       {children}
     </MushContext.Provider>
   );

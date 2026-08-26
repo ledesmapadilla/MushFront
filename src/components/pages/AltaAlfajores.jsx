@@ -632,10 +632,17 @@ const AltaAlfajores = () => {
         confirmButton: "btn btn-danger px-3 py-1 rounded-3 me-2 fw-bold",
         cancelButton: "btn btn-outline-secondary px-3 py-1 rounded-3 text-dark",
       },
-    }).then((result) => {
+    }).then(async (result) => {
       if (!result.isConfirmed) return;
 
-      eliminarAlfajor(item.id);
+      // Si el servidor no lo borro, no se borro: la fila se queda donde esta y
+      // el aviso de arriba dice por que.
+      try {
+        await eliminarAlfajor(item.id);
+      } catch {
+        return;
+      }
+
       if (form.id === item.id) {
         handleCerrarModal();
       }
