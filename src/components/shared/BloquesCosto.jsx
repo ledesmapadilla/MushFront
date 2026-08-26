@@ -38,6 +38,22 @@ const BloquesCosto = ({
   // derecha, para no dejar la mitad de la tarjeta vacia.
   const sola = !soloActiva && visibles.length <= 2;
 
+  // La receta puede declarar que no lleva esta parte: ahi el cero es el numero
+  // correcto y no hay nada que avisar.
+  const noUtilizaParte = ({ secciones }) =>
+    (secciones || []).length > 0 && secciones.every((s) => (costo.sinUso || []).includes(s));
+
+  // Un cero sin esa declaracion es otra cosa: que en la receta no se cargo nada.
+  const sinCompletarParte = (parte) =>
+    !noUtilizaParte(parte) && !(Number(costo[parte.campo]) > 0);
+
+  // Si a alguna de las partes que lo componen le falta cargar algo, el total no
+  // es un total: seria la suma de lo que hay tomando lo que falta como cero, y
+  // se lee como si estuviera completo. Se dice que no esta disponible en vez de
+  // mostrar un numero que no es.
+  const partesFaltantes = partes.filter(sinCompletarParte);
+  const faltanDatos = partesFaltantes.length > 0;
+
   return (
     <div
       className={`row g-2 w-100 m-0 ${
@@ -50,33 +66,37 @@ const BloquesCosto = ({
             : ""
       }`}
     >
-      {visibles.map(({ id, titulo, campo, secciones }) => {
+      {visibles.map((parte) => {
+        const { id, titulo, campo } = parte;
         const destino = enlaceDe ? enlaceDe(id) : null;
         const esTotal = id === PARTE_TOTAL.id;
         const esActiva = !soloActiva && id === activa && !esTotal;
-        // La receta puede declarar que no lleva esta parte: ahi el cero es el
-        // numero correcto y no hay nada que avisar.
-        const noUtiliza =
-          !esTotal &&
-          (secciones || []).length > 0 &&
-          secciones.every((s) => (costo.sinUso || []).includes(s));
+        const noUtiliza = !esTotal && noUtilizaParte(parte);
 
-        // Un cero sin esa declaracion es otra cosa: que en la receta no se
-        // cargo nada. Se dice en la caja de esa parte, que es donde se lo puede
-        // corregir; el total se sigue mostrando, aunque le falte esto.
-        const sinCompletar = !esTotal && !noUtiliza && !(Number(costo[campo]) > 0);
+        // El aviso de la parte se da en su caja, que es donde se lo puede
+        // corregir; el del total, en la del total.
+        const sinCompletar = !esTotal && sinCompletarParte(parte);
+        const totalIncompleto = esTotal && faltanDatos;
 
         const clases = [
           "mush-card-elevada h-100 rounded-3 px-2 py-2 text-center",
           "d-flex flex-column justify-content-center text-decoration-none",
           // El total lleva su color; una parte elegida, el tinte de la pantalla.
-          esTotal ? "mush-caja-resultado" : "",
+          esTotal && !totalIncompleto ? "mush-caja-resultado" : "",
           esActiva ? "bg-dulce-suave border-dulce" : "",
-          sinCompletar ? "mush-caja-sin-completar" : "",
+          sinCompletar || totalIncompleto ? "mush-caja-sin-completar" : "",
           destino ? "mush-card-hover" : "",
         ]
           .filter(Boolean)
           .join(" ");
+
+        // Lo que falta, listado, para el cartelito del total.
+        const queFalta = partesFaltantes.map((p) => p.titulo.toLowerCase()).join(", ");
+        const ayuda = totalIncompleto
+          ? `No se puede calcular el total: falta cargar ${queFalta} en la receta`
+          : sinCompletar
+            ? `Falta cargar ${titulo.toLowerCase()} en la receta`
+            : `Ver de donde sale ${titulo.toLowerCase()}`;
 
         const contenido = (
           <>
@@ -95,6 +115,15 @@ const BloquesCosto = ({
                 <i className="bi bi-exclamation-triangle-fill"></i> sin completar
                 <br />
                 en la receta
+              </span>
+            ) : totalIncompleto ? (
+              <span
+                className="text-danger fw-normal d-block lh-sm"
+                style={{ fontSize: "0.72rem" }}
+              >
+                <i className="bi bi-exclamation-triangle-fill"></i> no disponible
+                <br />
+                faltan datos
               </span>
             ) : (
               <span
@@ -118,16 +147,16 @@ const BloquesCosto = ({
                 to={destino}
                 className={clases}
                 style={{ height: ALTO_BLOQUE }}
-                title={
-                  sinCompletar
-                    ? `Falta cargar ${titulo.toLowerCase()} en la receta`
-                    : `Ver de donde sale ${titulo.toLowerCase()}`
-                }
+                title={ayuda}
               >
                 {contenido}
               </Link>
             ) : (
-              <div className={clases} style={{ height: ALTO_BLOQUE }}>
+              <div
+                className={clases}
+                style={{ height: ALTO_BLOQUE }}
+                title={totalIncompleto ? ayuda : undefined}
+              >
                 {contenido}
               </div>
             )}
