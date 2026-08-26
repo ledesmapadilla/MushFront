@@ -353,4 +353,17 @@ export const apiRecetas = {
     }
     return json.data;
   },
+
+  async eliminar(idOrSlug) {
+    let res;
+    try {
+      res = await pedir(`${API_URL}/recetas/${idOrSlug}`, { method: "DELETE" });
+    } catch {
+      throw new Error(`No se pudo conectar con el servidor Backend (${API_URL}).`);
+    }
+
+    const json = await leerJson(res);
+    if (!res.ok) throw new Error(json.message || "Error al eliminar en backend.");
+    return json;
+  },
 };

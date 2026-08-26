@@ -15,9 +15,17 @@ import Swal from "sweetalert2";
  */
 const GRUPO_MEZCLA = "Alfajores combinados";
 
+// El mismo encabezado, para las cajas de tabletas: tampoco es un producto.
+const GRUPO_MEZCLA_TABLETAS = "Tabletas combinadas";
+
 // El valor que toma "de que producto es" cuando la respuesta es que no es de
 // ninguno. No se guarda: lo que se guarda es lo que la caja lleva adentro.
 const MEZCLA = "__mezcla__";
+const MEZCLA_TABLETAS = "__mezcla_tabletas__";
+
+// Las dos son la misma respuesta -no es de ningun producto- y el formulario las
+// trata igual: en las dos hay que decir que lleva la caja.
+const esMezcla = (padre) => padre === MEZCLA || padre === MEZCLA_TABLETAS;
 
 /**
  * La categoria de un producto contesta una sola pregunta: en que se cuenta lo
@@ -34,7 +42,7 @@ const CATEGORIAS_PRODUCTO = ["Alfajor", "Mini", "Tableta", "Lata", "Doy Pack"];
  * subproducto no tiene receta ni rinde. Sirve para reconocerlo en las listas y
  * para buscarlo.
  */
-const CATEGORIAS_SUBPRODUCTO = ["Caja", "Pack"];
+const CATEGORIAS_SUBPRODUCTO = ["Caja", "Pack", "Doy Pack"];
 
 const categoriasDe = (tipo) =>
   tipo === SUBPRODUCTO ? CATEGORIAS_SUBPRODUCTO : CATEGORIAS_PRODUCTO;
@@ -119,11 +127,20 @@ const swalConfig = {
 };
 
 const AltaAlfajores = () => {
-  const { alfajores, recetas, packaging, guardarAlfajor, eliminarAlfajor, guardarReceta } =
-    useMush();
+  const {
+    alfajores,
+    recetas,
+    packaging,
+    guardarAlfajor,
+    eliminarAlfajor,
+    guardarReceta,
+    eliminarReceta,
+  } = useMush();
 
-  // Lo unico que se elige de otra lista: la caja de carton del packaging.
-  const cartones = (packaging || []).filter((item) => /caja/i.test(item.nombre || ""));
+  // Lo unico que se elige de otra lista: el envase del packaging. Son las
+  // cajas de carton y las bolsas doy pack; el resto del packaging (stickers,
+  // papeles) va en la receta de lo que lleva adentro, no en el envase.
+  const cartones = (packaging || []).filter((item) => /caja|doy ?pack/i.test(item.nombre || ""));
 
   const recetaDe = (slug) => (recetas || []).find((r) => r.slug === slug || r.id === slug);
 
@@ -196,7 +213,7 @@ const AltaAlfajores = () => {
 
   // Un subproducto de un producto lleva ese producto y nada mas: en vez de una
   // lista alcanza con decir cuantos entran.
-  const esDeUnProducto = Boolean(form.padre) && form.padre !== MEZCLA;
+  const esDeUnProducto = Boolean(form.padre) && !esMezcla(form.padre);
 
   // Una linea sin producto elegido esta a medio cargar: no cuenta.
   const lineasValidas = (lista) =>
@@ -302,7 +319,7 @@ const AltaAlfajores = () => {
       if (name === "padre") {
         if (!value) {
           proximo.lleva = [];
-        } else if (value === MEZCLA) {
+        } else if (esMezcla(value)) {
           // Una mezcla lleva mas de uno: arranca con dos lineas.
           proximo.lleva =
             prev.lleva.length > 1 ? prev.lleva : [{ ...LINEA_VACIA }, { ...LINEA_VACIA }];
@@ -400,13 +417,13 @@ const AltaAlfajores = () => {
         ? ""
         : distintos.length === 1
           ? distintos[0]
-          : MEZCLA;
+          : grupoDe(distintos);
 
     // De un solo producto se muestra una linea sola, asi que si venian varias
     // del mismo se suman: colapsarlas quedandose con la primera perderia el
     // resto al guardar.
     const llevaDelFormulario =
-      padre && padre !== MEZCLA
+      padre && !esMezcla(padre)
         ? [
             {
               producto: padre,
@@ -464,7 +481,7 @@ const AltaAlfajores = () => {
     // que nada, porque el nombre sale justamente de lo que lleva.
     if (esSub && lineas.length === 0) {
       setErrorNombre(
-        form.padre === MEZCLA
+        esMezcla(form.padre)
           ? "Falta decir que lleva la mezcla, y cuantos de cada uno."
           : form.padre
             ? "Falta decir cuantos entran por caja."
@@ -504,13 +521,13 @@ const AltaAlfajores = () => {
       return;
     }
 
-    // La caja de carton no es obligatoria -hay cosas que se venden sin ella-,
-    // pero olvidarsela es facil y el costo sale mal sin ruido: la caja es lo
-    // unico que un subproducto suma por su cuenta. Se pregunta, no se impide.
+    // El envase no es obligatorio -hay cosas que se venden sin el-, pero
+    // olvidarselo es facil y el costo sale mal sin ruido: es lo unico que un
+    // subproducto suma por su cuenta. Se pregunta, no se impide.
     if (esSub && !form.carton) {
       const respuesta = await Swal.fire({
         ...swalConfig,
-        title: "¿Sin caja de cartón?",
+        title: "¿Sin caja ni bolsa?",
         text: `"${nombreLimpio}" no tiene ninguna elegida, así que su costo va a ser solamente el de lo que lleva adentro.`,
         icon: "warning",
         showCancelButton: true,
@@ -620,10 +637,36 @@ const AltaAlfajores = () => {
     });
 
   const handleEliminar = (item) => {
+    /**
+     * Un producto y su receta se dan de alta juntos, asi que al borrarlo hay
+     * que decir si la receta se va con el. Si no se pregunta se va sola de
+     * todos modos: queda en recetas.json sin ningun producto que la nombre, y
+     * ninguna pantalla la muestra, pero el nombre sigue ocupado.
+     *
+     * Un subproducto no tiene receta propia: no hay nada que preguntar.
+     */
+    const suReceta = esSubproducto(item)
+      ? null
+      : (recetas || []).find((r) => r.slug === item.receta || r.id === item.receta);
+
+    const ingredientes = (suReceta?.ingredientes || []).length;
+    const cargada = ingredientes > 0 || Number(suReceta?.manoDeObra?.producidos) > 0;
+
     Swal.fire({
       ...swalConfig,
       title: `¿Eliminar ${item.nombre}?`,
       icon: "warning",
+      // La receta vacia viene marcada -no hay nada que perder-; la que tiene
+      // trabajo cargado hay que marcarla a proposito.
+      ...(suReceta
+        ? {
+            input: "checkbox",
+            inputValue: cargada ? 0 : 1,
+            inputPlaceholder: cargada
+              ? `Borrar tambien su receta (tiene ${ingredientes} ingredientes cargados)`
+              : "Borrar tambien su receta, que esta vacia",
+          }
+        : {}),
       showCancelButton: true,
       confirmButtonText: "Sí, eliminar",
       cancelButtonText: "Cancelar",
@@ -643,6 +686,18 @@ const AltaAlfajores = () => {
         return;
       }
 
+      // La receta se borra despues, y solo si el producto se borro: al reves,
+      // una receta borrada de un producto que se quedo no se puede recuperar.
+      let recetaBorrada = false;
+      if (suReceta && result.value) {
+        try {
+          await eliminarReceta(suReceta.slug || suReceta.id);
+          recetaBorrada = true;
+        } catch {
+          // El aviso de arriba ya dice que fallo: el producto igual se borro.
+        }
+      }
+
       if (form.id === item.id) {
         handleCerrarModal();
       }
@@ -654,6 +709,7 @@ const AltaAlfajores = () => {
         title: esSubproducto(item)
           ? "Se ha eliminado el subproducto"
           : "Se ha eliminado el producto",
+        text: recetaBorrada ? "Su receta se borró junto con él." : "",
         icon: "success",
         timer: 1600,
         showConfirmButton: false,
@@ -678,6 +734,19 @@ const AltaAlfajores = () => {
     };
     return puesto(a) - puesto(b) || porNombre(a, b);
   };
+
+  /**
+   * De cual de las dos mezclas es una caja que no cuelga de ningun producto.
+   *
+   * Como el grupo no se guarda -no es un producto, no existe en los datos- se
+   * deduce de lo que lleva: si todo lo que hay adentro son tabletas, es una
+   * caja de tabletas; si no, va con los alfajores.
+   */
+  const grupoDe = (ids) =>
+    ids.length > 0 &&
+    ids.every((id) => (alfajores || []).find((p) => p.id === id)?.categoria === "Tableta")
+      ? MEZCLA_TABLETAS
+      : MEZCLA;
 
   /**
    * De que producto cuelga un subproducto.
@@ -745,10 +814,18 @@ const AltaAlfajores = () => {
     // producto de la lista, que es de lo unico que estarian debajo.
     const mezclas = subproductos.filter((sub) => !colgados.has(sub.id)).sort(porNombre);
 
-    if (mezclas.length > 0) {
-      filas.push({ separador: GRUPO_MEZCLA });
-      mezclas.forEach((sub) => filas.push({ item: sub, sangria: true }));
-    }
+    const grupoDeSub = (sub) =>
+      grupoDe([...new Set(lineasValidas(llevaDe(sub)).map((l) => l.producto))]);
+
+    [
+      [MEZCLA, GRUPO_MEZCLA],
+      [MEZCLA_TABLETAS, GRUPO_MEZCLA_TABLETAS],
+    ].forEach(([grupo, titulo]) => {
+      const suyas = mezclas.filter((sub) => grupoDeSub(sub) === grupo);
+      if (suyas.length === 0) return;
+      filas.push({ separador: titulo });
+      suyas.forEach((sub) => filas.push({ item: sub, sangria: true }));
+    });
 
     return filas;
   })();
@@ -1069,6 +1146,7 @@ const AltaAlfajores = () => {
                           </option>
                         ))}
                         <option value={MEZCLA}>{GRUPO_MEZCLA}</option>
+                        <option value={MEZCLA_TABLETAS}>{GRUPO_MEZCLA_TABLETAS}</option>
                       </select>
 
                       {/* De un producto solo hace falta saber cuantos entran. */}
@@ -1098,7 +1176,7 @@ const AltaAlfajores = () => {
                     </div>
 
                     {/* Una mezcla no es de nadie: hay que decir que lleva. */}
-                    {form.padre === MEZCLA && (
+                    {esMezcla(form.padre) && (
                       <>
                         <div className="mush-card-elevada rounded-3 p-2 mt-2">
                           {form.lleva.map((linea, indice) => (
@@ -1316,7 +1394,7 @@ const AltaAlfajores = () => {
                       className="form-label text-secondary fw-semibold mb-1"
                       style={{ fontSize: "0.78rem" }}
                     >
-                      Caja de carton
+                      Caja o bolsa
                     </label>
                     <select
                       name="carton"
@@ -1325,7 +1403,7 @@ const AltaAlfajores = () => {
                       value={form.carton}
                       onChange={handleChange}
                     >
-                      <option value="">-- Sin caja --</option>
+                      <option value="">-- Sin envase --</option>
                       {cartones.map((item) => (
                         <option key={item.id} value={item.id}>
                           {item.nombre}

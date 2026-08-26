@@ -653,6 +653,23 @@ export function MushProvider({ children }) {
     return guardada;
   };
 
+  /**
+   * Borrar una receta.
+   *
+   * Se borra desde el alta de Productos, junto con el producto que la creo: son
+   * dos archivos distintos y hasta ahora el producto se iba solo, dejando la
+   * receta sin nadie que la nombre y sin pantalla desde donde verla.
+   */
+  const eliminarReceta = async (idOrSlug) => {
+    try {
+      await apiRecetas.eliminar(idOrSlug);
+    } catch (err) {
+      anotarFalla("eliminar la receta", err);
+      throw err;
+    }
+    setRecetas((prev) => prev.filter((r) => r.slug !== idOrSlug && r.id !== idOrSlug));
+  };
+
   return (
     <MushContext.Provider
       value={{
@@ -684,6 +701,7 @@ export function MushProvider({ children }) {
         cambiarEstadoProduccion,
         registrarVenta,
         guardarReceta,
+        eliminarReceta,
         setCostosOperativos,
         tema,
         alternarTema,
